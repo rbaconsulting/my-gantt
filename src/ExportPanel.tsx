@@ -29,6 +29,85 @@ interface ConflictResult {
   reason?: string;
 }
 
+// Add a helper to parse simple CSV
+function parseSimpleCSV(csv: string) {
+  const lines = csv.trim().split(/\r?\n/);
+  const headers = lines[0].split(',').map(h => h.replace(/^"|"$/g, '').trim());
+  const rows = lines.slice(1).map(line => {
+    const values = line.split(',').map(v => v.replace(/^"|"$/g, '').trim());
+    const row: Record<string, string> = {};
+    headers.forEach((h, i) => { row[h] = values[i] || ''; });
+    return row;
+  });
+  return { headers, rows };
+}
+
+// Add a helper to analyze project conflicts (for both JSON and CSV imports)
+function analyzeProjectConflicts(
+  importedProjects: ProjectFormData[],
+  existingProjects: ProjectFormData[]
+): ConflictResult[] {
+  const results: ConflictResult[] = [];
+  const mergedProjects = [...existingProjects];
+
+  importedProjects.forEach((importedProject) => {
+    const existingIndex = mergedProjects.findIndex((p) => p.name === importedProject.name);
+    if (existingIndex !== -1) {
+      // Compare all fields except lastModified
+      const existing = mergedProjects[existingIndex];
+      const fieldsToCompare = [
+        'name', 'sponsor', 'pool', 'startDate', 'targetDate',
+        'estimatedHours', 'progress', 'status', 'weeklyAllocation', 'notes'
+      ];
+      const isIdentical = fieldsToCompare.every(
+        (field) => (existing as any)[field] === (importedProject as any)[field]
+      );
+      if (isIdentical) {
+        results.push({
+          type: 'project',
+          name: importedProject.name,
+          action: 'kept',
+          existingData: existing,
+          importedData: importedProject,
+          reason: 'No changes'
+        });
+      } else {
+        results.push({
+          type: 'project',
+          name: importedProject.name,
+          action: 'updated',
+          existingData: existing,
+          importedData: importedProject,
+          reason: 'Project updated (fields differ)'
+        });
+      }
+    } else {
+      results.push({
+        type: 'project',
+        name: importedProject.name,
+        action: 'added',
+        importedData: importedProject,
+        reason: 'New project'
+      });
+    }
+  });
+
+  existingProjects.forEach((existingProject) => {
+    const existsInImport = importedProjects.some((p) => p.name === existingProject.name);
+    if (!existsInImport) {
+      results.push({
+        type: 'project',
+        name: existingProject.name,
+        action: 'deleted',
+        existingData: existingProject,
+        reason: 'Project not found in import data (deleted)'
+      });
+    }
+  });
+
+  return results;
+}
+
 const ExportPanel: React.FC<ExportPanelProps> = ({ projects, pools, filters, onImport }) => {
   const [importData, setImportData] = useState('');
   const [importError, setImportError] = useState('');
@@ -37,6 +116,7 @@ const ExportPanel: React.FC<ExportPanelProps> = ({ projects, pools, filters, onI
   const [backupData, setBackupData] = useState<{ projects: ProjectFormData[]; pools: PoolData[] } | null>(null);
   const [importApplied, setImportApplied] = useState(false);
   const [pendingImport, setPendingImport] = useState<{ projects: ProjectFormData[]; pools: PoolData[] } | null>(null);
+  const [csvImportError, setCsvImportError] = useState('');
 
   // Apply filters to projects (same logic as GanttChart)
   const getFilteredProjects = () => {
@@ -235,49 +315,7 @@ const ExportPanel: React.FC<ExportPanelProps> = ({ projects, pools, filters, onI
       const mergedPools = [...pools];
 
       // Handle project conflicts
-      timestampedData.projects.forEach((importedProject: ProjectFormData) => {
-        const existingIndex = mergedProjects.findIndex((p: ProjectFormData) => p.name === importedProject.name);
-        
-        if (existingIndex !== -1) {
-          // Conflict detected - compare timestamps
-          const existing = mergedProjects[existingIndex];
-          const existingTime = existing.lastModified ? new Date(existing.lastModified).getTime() : 0;
-          const importedTime = importedProject.lastModified ? new Date(importedProject.lastModified).getTime() : 0;
-          
-          if (importedTime > existingTime) {
-            // Imported data is newer, replace existing
-            mergedProjects[existingIndex] = importedProject;
-            results.push({
-              type: 'project',
-              name: importedProject.name,
-              action: 'updated',
-              existingData: existing,
-              importedData: importedProject,
-              reason: `Imported data is newer (${new Date(importedTime).toLocaleString()} vs ${new Date(existingTime).toLocaleString()})`
-            });
-          } else {
-            // Existing is newer or equal, keep existing
-            results.push({
-              type: 'project',
-              name: importedProject.name,
-              action: 'kept',
-              existingData: existing,
-              importedData: importedProject,
-              reason: `Existing data is newer or equal (${new Date(existingTime).toLocaleString()} vs ${new Date(importedTime).toLocaleString()})`
-            });
-          }
-        } else {
-          // New project, add it
-          mergedProjects.push(importedProject);
-          results.push({
-            type: 'project',
-            name: importedProject.name,
-            action: 'added',
-            importedData: importedProject,
-            reason: 'New project'
-          });
-        }
-      });
+      results.push(...analyzeProjectConflicts(timestampedData.projects, projects));
 
       // Handle pool conflicts
       timestampedData.pools.forEach((importedPool: PoolData) => {
@@ -390,6 +428,50 @@ const ExportPanel: React.FC<ExportPanelProps> = ({ projects, pools, filters, onI
       setPendingImport(null);
       setImportData('');
     }
+  };
+
+  const handleCSVImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setCsvImportError('');
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target?.result as string;
+      try {
+        const { headers, rows } = parseSimpleCSV(text);
+        // Validate required columns
+        const required = [
+          'Project Name', 'Sponsor', 'Pool', 'Start Date', 'Target Date',
+          'Estimated Hours', 'Progress (%)', 'Status', 'Weekly Allocation (%)', 'Notes', 'Last Modified'
+        ];
+        for (const col of required) {
+          if (!headers.includes(col)) throw new Error(`Missing column: ${col}`);
+        }
+        // Convert rows to ProjectFormData
+        const projects = rows.map(row => ({
+          name: row['Project Name'],
+          sponsor: row['Sponsor'],
+          pool: row['Pool'],
+          startDate: row['Start Date'],
+          targetDate: row['Target Date'],
+          estimatedHours: Number(row['Estimated Hours']) || 0,
+          progress: Number(row['Progress (%)']) || 0,
+          status: row['Status'],
+          weeklyAllocation: Number(row['Weekly Allocation (%)']) || 0,
+          notes: row['Notes'],
+          lastModified: row['Last Modified'] || new Date().toISOString(),
+        }));
+        // Use pools from current state (or optionally parse from CSV if included)
+        setPendingImport({ projects, pools });
+        // Analyze conflicts for summary
+        setConflictResults(analyzeProjectConflicts(projects, projects));
+        setShowConflictSummary(true);
+        setImportApplied(false);
+      } catch (err: any) {
+        setCsvImportError(err.message || 'Invalid CSV format');
+      }
+    };
+    reader.readAsText(file);
   };
 
   const getActionColor = (action: string) => {
@@ -608,7 +690,7 @@ const ExportPanel: React.FC<ExportPanelProps> = ({ projects, pools, filters, onI
         <div>
           <h4 style={{ margin: '0 0 0.5rem 0', color: '#000' }}>Import Data</h4>
           <p style={{ fontSize: '14px', color: '#666', marginBottom: '1rem' }}>
-            Paste JSON data to import (will replace current data)
+            Paste JSON data to import (will replace current data), or import a CSV exported from this tool.
           </p>
           <div style={{ 
             padding: '0.5rem', 
@@ -619,8 +701,14 @@ const ExportPanel: React.FC<ExportPanelProps> = ({ projects, pools, filters, onI
             fontSize: '14px',
             color: '#000'
           }}>
-            ⚠️ <strong>Warning:</strong> Import will automatically delete any projects/pools that don't exist in the imported data.
+            ⚠️ <strong>Warning:</strong> For CSV import, only use file templates exported from this tool.
           </div>
+          <input type="file" accept=".csv" onChange={handleCSVImport} style={{ marginBottom: '0.5rem' }} />
+          {csvImportError && (
+            <div style={{ color: '#dc2626', fontSize: '12px', marginBottom: '0.5rem' }}>
+              {csvImportError}
+            </div>
+          )}
           <textarea
             value={importData}
             onChange={(e) => {

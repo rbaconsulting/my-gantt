@@ -49,7 +49,8 @@ This is a web-based Gantt chart and resource management tool for tracking projec
 ### 6. Export & Import
 - **Export Filtered Data:** Download current filtered projects as JSON or CSV.
 - **Export Full Backup:** Download all data as JSON.
-- **Import Data:** Paste JSON data and click "Import Data."
+- **Import Data:** Paste JSON data and click "Import Data." Or use the CSV import:
+  - **CSV Import:** Only use CSVs exported from this tool. Do not edit in Excel/Sheets or add commas, quotes, or newlines in fields. Only clean CSVs are supported.
   - Review the conflict summary.
   - Click "Confirm Import" to apply changes.
   - Use "Revert to Previous State" to undo the import if needed.
