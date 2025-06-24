@@ -8,7 +8,7 @@ This is a web-based Gantt chart and resource management tool for tracking projec
 ## Getting Started
 
 ### Accessing the App
-- Visit: [https://rbaconsulting.github.io/my-gannt/](https://rbaconsulting.github.io/my-gannt/)
+- Visit: [https://rbaconsulting.github.io/my-gantt/](https://rbaconsulting.github.io/my-gantt/)
 - No login or signup required. All data is stored in your browser.
 
 ---
@@ -86,4 +86,4 @@ This is a web-based Gantt chart and resource management tool for tracking projec
 ---
 
 ## Support
-- For issues or feature requests, open an issue on [GitHub](https://github.com/rbaconsulting/my-gannt). 
+- For issues or feature requests, open an issue on [GitHub](https://github.com/rbaconsulting/my-gantt). 

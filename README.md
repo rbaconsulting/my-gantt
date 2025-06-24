@@ -15,7 +15,7 @@ A comprehensive Gantt chart application built with React, TypeScript, and Vite. 
 
 ## Live Demo
 
-Visit the live application: [My Gantt Chart App](https://rbaconsulting.github.io/my-gannt/)
+Visit the live application: [My Gantt Chart App](https://rbaconsulting.github.io/my-gantt/)
 
 ## Local Development
 
@@ -37,10 +37,10 @@ npm run preview
 
 This app is configured for GitHub Pages deployment:
 
-1. **Repository created** at https://github.com/rbaconsulting/my-gannt.git
+1. **Repository created** at https://github.com/rbaconsulting/my-gantt.git
 2. **Base URL configured** in `vite.config.ts` to match repository name:
    ```typescript
-   base: '/my-gannt/'
+   base: '/my-gantt/'
    ```
 3. **Push your code** to the main branch
 4. **Enable GitHub Pages** in your repository settings:
