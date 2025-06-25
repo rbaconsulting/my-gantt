@@ -315,7 +315,28 @@ const ExportPanel: React.FC<ExportPanelProps> = ({ projects, pools, filters, onI
       const mergedPools = [...pools];
 
       // Handle project conflicts
-      results.push(...analyzeProjectConflicts(timestampedData.projects, projects));
+      const projectConflicts = analyzeProjectConflicts(timestampedData.projects, projects);
+      results.push(...projectConflicts);
+      
+      // Actually merge the imported projects
+      timestampedData.projects.forEach((importedProject: ProjectFormData) => {
+        const existingIndex = mergedProjects.findIndex((p) => p.name === importedProject.name);
+        if (existingIndex !== -1) {
+          // Update existing project
+          mergedProjects[existingIndex] = importedProject;
+        } else {
+          // Add new project
+          mergedProjects.push(importedProject);
+        }
+      });
+      
+      // Remove projects that don't exist in import (deletions)
+      const importedProjectNames = timestampedData.projects.map((p: ProjectFormData) => p.name);
+      for (let i = mergedProjects.length - 1; i >= 0; i--) {
+        if (!importedProjectNames.includes(mergedProjects[i].name)) {
+          mergedProjects.splice(i, 1);
+        }
+      }
 
       // Handle pool conflicts
       timestampedData.pools.forEach((importedPool: PoolData) => {
