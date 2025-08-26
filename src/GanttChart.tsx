@@ -1,5 +1,87 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useState, useEffect, useMemo } from 'react';
 import type { ProjectFormData, PoolData } from './types';
+
+// Pre-processed project interface for better performance
+interface ProcessedProject {
+  pool: string;
+  startDate: Date;
+  endDate: Date;
+  isActive: boolean;
+  weeklyAllocation: number;
+  estimatedHours: number;
+  status?: string;
+  name: string;
+  sponsor: string;
+  progress: number;
+  notes?: string;
+  lastModified?: string;
+}
+
+// Cache for utilization calculations
+class UtilizationCache {
+  private cache = new Map<string, any>();
+  private maxAge = 2 * 60 * 1000; // 2 minutes cache
+  
+  get(key: string) {
+    const cached = this.cache.get(key);
+    if (cached && Date.now() - cached.timestamp < this.maxAge) {
+      return cached.data;
+    }
+    return null;
+  }
+  
+  set(key: string, data: any) {
+    this.cache.set(key, { data, timestamp: Date.now() });
+  }
+  
+  clear() {
+    this.cache.clear();
+  }
+}
+
+const utilizationCache = new UtilizationCache();
+
+// Pre-process projects for better performance
+function preprocessProjects(projects: ProjectFormData[]): ProcessedProject[] {
+  return projects.map(p => ({
+    pool: p.pool,
+    startDate: new Date(p.startDate),
+    endDate: new Date(p.targetDate),
+    isActive: !p.status?.toLowerCase().includes('complete'),
+    weeklyAllocation: p.weeklyAllocation || 0,
+    estimatedHours: p.estimatedHours,
+    status: p.status,
+    name: p.name,
+    sponsor: p.sponsor,
+    progress: p.progress,
+    notes: p.notes,
+    lastModified: p.lastModified
+  }));
+}
+
+// Get active projects for a specific week (optimized)
+function getActiveProjectsInWeek(processedProjects: ProcessedProject[], weekStart: Date, weekEnd: Date): ProcessedProject[] {
+  return processedProjects.filter(p => 
+    p.isActive && 
+    p.startDate <= weekEnd && 
+    p.endDate >= weekStart
+  );
+}
+
+// Get projects by pool for a specific week
+function getProjectsByPoolInWeek(processedProjects: ProcessedProject[], weekStart: Date, weekEnd: Date): Map<string, ProcessedProject[]> {
+  const activeProjects = getActiveProjectsInWeek(processedProjects, weekStart, weekEnd);
+  const poolProjects = new Map<string, ProcessedProject[]>();
+  
+  activeProjects.forEach(project => {
+    if (!poolProjects.has(project.pool)) {
+      poolProjects.set(project.pool, []);
+    }
+    poolProjects.get(project.pool)!.push(project);
+  });
+  
+  return poolProjects;
+}
 
 interface GanttChartProps {
   projects: ProjectFormData[];
@@ -17,6 +99,7 @@ interface GanttChartProps {
     };
     search?: string;
   };
+  onWeekSelect?: (weekIndex: number | null, weekStart: Date | null) => void;
 }
 
 // Simple color palette for pools
@@ -115,7 +198,7 @@ function getWeekStart(date: Date) {
 
 function getAllWeekStarts(min: Date, max: Date) {
   const weeks = [];
-  let current = getWeekStart(min);
+  const current = getWeekStart(min);
   // Prepend one week before min
   current.setDate(current.getDate() - 7);
   while (current <= max) {
@@ -126,38 +209,247 @@ function getAllWeekStarts(min: Date, max: Date) {
 }
 
 function getCurrentWeekConcurrentProjects(projects: ProjectFormData[], poolName: string, weekStart: Date, weekEnd: Date) {
-  return projects.filter(p =>
+  // Use pre-processed projects for better performance
+  const processedProjects = preprocessProjects(projects);
+  return processedProjects.filter(p =>
     p.pool === poolName &&
-    !p.status?.toLowerCase().includes('complete') &&
-    new Date(p.startDate) <= weekEnd &&
-    new Date(p.targetDate) >= weekStart
+    p.isActive &&
+    p.startDate <= weekEnd &&
+    p.endDate >= weekStart
   );
 }
 
 function calculatePoolUtilization(projects: ProjectFormData[], pools: PoolData[], poolName: string, weekStart: Date, weekEnd: Date) {
+  // Create cache key for this calculation
+  const cacheKey = `${poolName}-${weekStart.toISOString().split('T')[0]}-${weekEnd.toISOString().split('T')[0]}`;
+  
+  // Check cache first
+  const cached = utilizationCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+  
   const pool = pools.find(p => p.name === poolName);
   if (!pool) return { totalAllocated: 0, poolHours: 0, utilization: 0, isOverAllocated: false };
   
   const concurrentProjects = getCurrentWeekConcurrentProjects(projects, poolName, weekStart, weekEnd);
   const totalAllocated = concurrentProjects.reduce((sum, proj) => {
     const allocationPercent = proj.status?.toLowerCase() === 'complete' ? 0 : (proj.weeklyAllocation || 0);
-    return sum + (allocationPercent / 100) * 40; // Convert percentage to hours
+    // Use pool's standard week hours instead of hardcoded 40
+    const standardWeekHours = pool.standardWeekHours || 40;
+    return sum + (allocationPercent / 100) * standardWeekHours;
   }, 0);
   
-  const utilization = (totalAllocated / pool.weeklyHours) * 100;
-  const isOverAllocated = totalAllocated > pool.weeklyHours;
+  // Account for reserved hours (support and meetings)
+  const reservedHours = (pool.supportHours || 0) + (pool.meetingHours || 0);
+  const availableHours = pool.weeklyHours - reservedHours;
+  
+  const utilization = (totalAllocated / availableHours) * 100;
+  const isOverAllocated = totalAllocated > availableHours;
+  
+  const result = {
+    totalAllocated: Math.round(totalAllocated * 10) / 10,
+    poolHours: pool.weeklyHours,
+    availableHours: Math.round(availableHours * 10) / 10,
+    reservedHours: Math.round(reservedHours * 10) / 10,
+    utilization: Math.round(utilization * 10) / 10,
+    isOverAllocated
+  };
+  
+  // Cache the result
+  utilizationCache.set(cacheKey, result);
+  
+  return result;
+}
+
+function calculatePoolUtilizationFromProjects(projects: ProcessedProject[], pool: PoolData) {
+  const totalAllocated = projects.reduce((sum, proj) => {
+    const allocationPercent = proj.status?.toLowerCase() === 'complete' ? 0 : (proj.weeklyAllocation || 0);
+    // Use pool's standard week hours instead of hardcoded 40
+    const standardWeekHours = pool.standardWeekHours || 40;
+    return sum + (allocationPercent / 100) * standardWeekHours;
+  }, 0);
+  
+  // Account for reserved hours (support and meetings)
+  const reservedHours = (pool.supportHours || 0) + (pool.meetingHours || 0);
+  const availableHours = pool.weeklyHours - reservedHours;
+  
+  const utilization = (totalAllocated / availableHours) * 100;
+  const isOverAllocated = totalAllocated > availableHours;
   
   return {
     totalAllocated: Math.round(totalAllocated * 10) / 10,
     poolHours: pool.weeklyHours,
+    availableHours: Math.round(availableHours * 10) / 10,
+    reservedHours: Math.round(reservedHours * 10) / 10,
     utilization: Math.round(utilization * 10) / 10,
     isOverAllocated
   };
 }
 
-const GanttChart: React.FC<GanttChartProps> = ({ projects, pools, filters }) => {
+function getFutureOverAllocationWarnings(projects: ProjectFormData[], pools: PoolData[], weekStarts: Date[], currentWeekIdx: number) {
+  const warnings: Array<{poolName: string, weekStart: Date, utilization: ReturnType<typeof calculatePoolUtilization>}> = [];
+  
+  // Pre-process all projects once
+  const processedProjects = preprocessProjects(projects);
+  
+  // Check next 4 weeks for over-allocation
+  const futureWeeks = Math.min(4, weekStarts.length - currentWeekIdx - 1);
+  if (futureWeeks <= 0) return warnings;
+  
+  // Pre-allocate array with estimated size for better performance
+  const estimatedWarnings = futureWeeks * pools.length;
+  warnings.length = estimatedWarnings;
+  let warningIndex = 0;
+  
+  for (let i = currentWeekIdx + 1; i < Math.min(currentWeekIdx + 5, weekStarts.length); i++) {
+    const weekStart = weekStarts[i];
+    const weekEnd = new Date(weekStart.getTime() + 6 * 24 * 60 * 60 * 1000);
+    
+    // Get all active projects for this week once
+    const weekProjects = getProjectsByPoolInWeek(processedProjects, weekStart, weekEnd);
+    
+    // Calculate utilization for all pools in this week
+    pools.forEach(pool => {
+      const poolProjects = weekProjects.get(pool.name) || [];
+      const utilization = calculatePoolUtilizationFromProjects(poolProjects, pool);
+      
+      if (utilization.isOverAllocated) {
+        warnings[warningIndex++] = { 
+          poolName: pool.name, 
+          weekStart, 
+          utilization 
+        };
+      }
+    });
+  }
+  
+  // Trim array to actual size
+  warnings.length = warningIndex;
+  return warnings;
+}
+
+function renderMeetingHoursIndicators(projects: ProjectFormData[], pools: PoolData[], weekStarts: Date[], weekWidth: number, chartTopPad: number) {
+  const meetingIndicators: React.ReactElement[] = [];
+  
+  // Pre-process projects once for better performance
+  const processedProjects = preprocessProjects(projects);
+  
+  weekStarts.forEach((weekStart, weekIndex) => {
+    const weekEnd = new Date(weekStart.getTime() + 6 * 24 * 60 * 60 * 1000);
+    
+    // Get all pools that have active projects in this week using optimized function
+    const activePoolsInWeek = new Set<string>();
+    const weekProjects = getActiveProjectsInWeek(processedProjects, weekStart, weekEnd);
+    
+    weekProjects.forEach(project => {
+      if (project.pool) {
+        activePoolsInWeek.add(project.pool);
+      }
+    });
+    
+    // Calculate total meeting hours for pools with active projects this week
+    let totalMeetingHours = 0;
+    activePoolsInWeek.forEach(poolName => {
+      const pool = pools.find(p => p.name === poolName);
+      if (pool && pool.meetingHours) {
+        totalMeetingHours += pool.meetingHours;
+      }
+    });
+    
+    // Only show indicator if there are meeting hours
+    if (totalMeetingHours > 0) {
+      const x = CHART_LEFT_PAD + weekIndex * weekWidth;
+      const y = chartTopPad + 10; // Position below the horizontal timeline line
+      
+      meetingIndicators.push(
+        <g key={`meeting-week-${weekIndex}`}>
+          <rect
+            x={x + 2}
+            y={y}
+            width={weekWidth - 4}
+            height={8}
+            fill="#f59e0b"
+            opacity={0.7}
+            rx={2}
+          />
+          <text
+            x={x + weekWidth / 2}
+            y={y + 6}
+            fontSize={8}
+            fill="#fff"
+            textAnchor="middle"
+            fontWeight="bold"
+          >
+            {totalMeetingHours}h
+          </text>
+        </g>
+      );
+    }
+  });
+  
+  return meetingIndicators;
+}
+
+const GanttChart: React.FC<GanttChartProps> = ({ projects, pools, filters, onWeekSelect }) => {
+  console.log('GanttChart: Component rendering started', { projectsCount: projects.length, poolsCount: pools.length });
+  
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(1200);
+  const [selectedWeekIndex, setSelectedWeekIndex] = useState<number | null>(null);
+  
+  // Virtual scrolling state
+  const [scrollTop, setScrollTop] = useState(0);
+  const [visibleRange, setVisibleRange] = useState({ start: 0, end: 50 });
+  const ROW_HEIGHT = BAR_HEIGHT + BAR_GAP;
+  const BUFFER_SIZE = 10; // Number of extra rows to render above/below visible area
+  
+  // Web Worker state
+  const [worker, setWorker] = useState<Worker | null>(null);
+  const [workerReady, setWorkerReady] = useState(false);
+  const [isCalculating, setIsCalculating] = useState(false);
+  const [cachedFutureWarnings, setCachedFutureWarnings] = useState<any[]>([]);
+
+  console.log('GanttChart: Hooks initialized');
+
+  // Initialize Web Worker
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'Worker' in window) {
+      const newWorker = new Worker('/utilization-worker.js');
+      
+      newWorker.onmessage = (e) => {
+        const { type, data } = e.data;
+        
+        switch (type) {
+          case 'WORKER_READY':
+            setWorkerReady(true);
+            break;
+            
+          case 'FUTURE_WARNINGS_RESULT':
+            setCachedFutureWarnings(data);
+            setIsCalculating(false);
+            break;
+            
+          case 'ERROR':
+            console.error('Worker error:', data.error);
+            setIsCalculating(false);
+            break;
+        }
+      };
+      
+      setWorker(newWorker);
+      
+      return () => {
+        newWorker.terminate();
+      };
+    }
+  }, []);
+
+  // Clear cache when projects or pools change
+  useEffect(() => {
+    utilizationCache.clear();
+    setCachedFutureWarnings([]);
+  }, [projects, pools]);
 
   useEffect(() => {
     function updateWidth() {
@@ -224,7 +516,6 @@ const GanttChart: React.FC<GanttChartProps> = ({ projects, pools, filters }) => 
   const validProjects = filteredProjects.filter(
     p => !isNaN(new Date(p.targetDate).getTime()) && !isNaN(new Date(p.startDate).getTime())
   );
-  if (!validProjects.length) return <div style={{ padding: 24 }}>No projects match the current filters.</div>;
 
   // Sort projects by start date
   const sorted = [...validProjects].sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime());
@@ -300,6 +591,75 @@ const GanttChart: React.FC<GanttChartProps> = ({ projects, pools, filters }) => 
     return utilization.isOverAllocated;
   });
 
+  // Calculate future over-allocation warnings
+  const futureOverAllocationWarnings = useMemo(() => {
+    // Use cached results from worker if available
+    if (cachedFutureWarnings.length > 0) {
+      return cachedFutureWarnings.map(warning => ({
+        ...warning,
+        weekStart: new Date(warning.weekStart)
+      }));
+    }
+    
+    // Fallback to main thread calculation
+    return getFutureOverAllocationWarnings(projects, pools, weekStarts, currentWeekIdx);
+  }, [cachedFutureWarnings, projects, pools, weekStarts, currentWeekIdx]);
+
+  // Trigger worker calculation when data changes
+  useEffect(() => {
+    if (worker && workerReady && projects.length > 0 && pools.length > 0 && weekStarts.length > 0) {
+      setIsCalculating(true);
+      
+      worker.postMessage({
+        type: 'FUTURE_WARNINGS',
+        data: {
+          projects,
+          pools,
+          weekStarts: weekStarts.map(d => d.toISOString()),
+          currentWeekIdx
+        },
+        requestId: Date.now()
+      });
+    }
+  }, [worker, workerReady, projects, pools, weekStarts, currentWeekIdx]);
+
+  // Calculate visible range based on scroll position
+  useEffect(() => {
+    const start = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - BUFFER_SIZE);
+    const end = Math.min(
+      sorted.length,
+      Math.ceil((scrollTop + chartHeight) / ROW_HEIGHT) + BUFFER_SIZE
+    );
+    setVisibleRange({ start, end });
+  }, [scrollTop, chartHeight, sorted.length]);
+
+  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    setScrollTop(e.currentTarget.scrollTop);
+  };
+
+  const handleWeekClick = (weekIndex: number) => {
+    const newSelectedWeek = selectedWeekIndex === weekIndex ? null : weekIndex;
+    setSelectedWeekIndex(newSelectedWeek);
+    
+    // Call the callback with the selected week information
+    if (onWeekSelect) {
+      onWeekSelect(newSelectedWeek, newSelectedWeek !== null ? weekStarts[newSelectedWeek] : null);
+    }
+  };
+
+  // Early return check - but hooks must be called before this
+  if (!validProjects.length) {
+    console.log('GanttChart: Early return - no valid projects');
+    return <div style={{ padding: 24 }}>No projects match the current filters.</div>;
+  }
+
+  console.log('GanttChart: About to render JSX', { 
+    validProjectsCount: validProjects.length, 
+    sortedCount: sorted.length,
+    chartHeight,
+    weekCount 
+  });
+
   return (
     <div ref={containerRef} style={{ width: '100%' }}>
       {/* Over-allocation Warnings */}
@@ -313,13 +673,58 @@ const GanttChart: React.FC<GanttChartProps> = ({ projects, pools, filters }) => 
           color: '#dc2626'
         }}>
           <div style={{ fontWeight: 'bold', marginBottom: '0.5rem' }}>
-            ⚠️ Over-allocation Warnings
+            ⚠️ Current Week Over-allocation Warnings
           </div>
           {overAllocatedPools.map(poolName => {
             const utilization = calculatePoolUtilization(projects, pools, poolName, currentWeekStart, currentWeekEnd);
             return (
               <div key={poolName} style={{ fontSize: '14px', marginBottom: '0.25rem' }}>
-                <strong>{poolName}</strong>: {utilization.totalAllocated}h allocated of {utilization.poolHours}h available ({utilization.utilization}% utilization)
+                <strong>{poolName}</strong>: {utilization.totalAllocated}h allocated of {utilization.availableHours}h available 
+                ({utilization.utilization}% utilization)
+                {utilization.reservedHours && utilization.reservedHours > 0 && (
+                  <span style={{ color: '#666', fontSize: '12px' }}>
+                    {' '}({utilization.poolHours}h total - {utilization.reservedHours}h reserved)
+                  </span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Future Over-allocation Warnings */}
+      {futureOverAllocationWarnings.length > 0 && (
+        <div style={{ 
+          background: '#fff7ed', 
+          border: '1px solid #fed7aa', 
+          borderRadius: '6px', 
+          padding: '1rem', 
+          marginBottom: '1rem',
+          color: '#ea580c'
+        }}>
+          <div style={{ fontWeight: 'bold', marginBottom: '0.5rem' }}>
+            🔮 Future Week Over-allocation Warnings
+            {isCalculating && (
+              <span style={{ marginLeft: '8px', fontSize: '14px', color: '#666' }}>
+                ⏳ Calculating...
+              </span>
+            )}
+          </div>
+          {futureOverAllocationWarnings.map((warning, index) => {
+            const weekLabel = warning.weekStart.toLocaleDateString('en-US', { 
+              month: 'short', 
+              day: 'numeric',
+              year: 'numeric'
+            });
+            return (
+              <div key={`${warning.poolName}-${index}`} style={{ fontSize: '14px', marginBottom: '0.25rem' }}>
+                <strong>{warning.poolName}</strong> (Week of {weekLabel}): {warning.utilization.totalAllocated}h allocated of {warning.utilization.availableHours}h available 
+                ({warning.utilization.utilization}% utilization)
+                {warning.utilization.reservedHours && warning.utilization.reservedHours > 0 && (
+                  <span style={{ color: '#666', fontSize: '12px' }}>
+                    {' '}({warning.utilization.poolHours}h total - {warning.utilization.reservedHours}h reserved)
+                  </span>
+                )}
               </div>
             );
           })}
@@ -394,155 +799,205 @@ const GanttChart: React.FC<GanttChartProps> = ({ projects, pools, filters }) => 
         </div>
       )}
       
-      <svg width={chartWidth} height={chartHeight} style={{ 
-        background: '#fff', 
-        borderRadius: 8, 
-        boxShadow: '0 2px 8px #0001', 
-        margin: '2rem auto', 
-        width: '100%', 
-        maxWidth: '100%',
-        display: 'block'
-      }}>
-        <text x={CHART_LEFT_PAD} y={36} fontSize={18} fontWeight="bold">Project Timeline</text>
-        {/* Highlight current week column */}
-        {currentWeekIdx > -1 && (
-          <rect
-            x={CHART_LEFT_PAD + currentWeekIdx * adjustedWeekWidth}
-            y={CHART_TOP_PAD - 30}
-            width={adjustedWeekWidth}
-            height={chartHeight - (CHART_TOP_PAD - 30) - 10}
-            fill="#ffe066"
-            fillOpacity={0.4}
-            style={{ pointerEvents: 'none' }}
+      <div 
+        style={{ 
+          height: chartHeight, 
+          overflowY: 'auto', 
+          overflowX: 'hidden',
+          position: 'relative'
+        }}
+        onScroll={handleScroll}
+      >
+        <svg 
+          width={chartWidth} 
+          height={chartHeight} 
+          style={{ 
+            background: '#fff', 
+            borderRadius: 8, 
+            boxShadow: '0 2px 8px #0001', 
+            margin: '2rem auto', 
+            width: '100%', 
+            maxWidth: '100%',
+            display: 'block',
+            position: 'absolute',
+            top: 0,
+            left: 0
+          }}
+        >
+          <text x={CHART_LEFT_PAD} y={36} fontSize={18} fontWeight="bold">Project Timeline</text>
+          
+          {/* Highlight current week column */}
+          {currentWeekIdx > -1 && (
+            <rect
+              x={CHART_LEFT_PAD + currentWeekIdx * adjustedWeekWidth}
+              y={0}
+              width={adjustedWeekWidth}
+              height={chartHeight}
+              fill="#3b82f6"
+              opacity={0.1}
+            />
+          )}
+          
+          {/* Highlight selected week column */}
+          {selectedWeekIndex !== null && selectedWeekIndex !== currentWeekIdx && (
+            <rect
+              x={CHART_LEFT_PAD + selectedWeekIndex * adjustedWeekWidth}
+              y={0}
+              width={adjustedWeekWidth}
+              height={chartHeight}
+              fill="#8b5cf6"
+              opacity={0.1}
+            />
+          )}
+
+          {/* Week grid lines and labels */}
+          {weekStarts.map((w, i) => {
+            const isNarrowColumn = adjustedWeekWidth < 60;
+            const labelX = CHART_LEFT_PAD + i * adjustedWeekWidth + adjustedWeekWidth / 2;
+            const labelY = isNarrowColumn ? CHART_TOP_PAD - 5 : CHART_TOP_PAD - 10;
+            const isSelected = selectedWeekIndex === i;
+            const isCurrent = i === currentWeekIdx;
+            
+            return (
+              <g key={w.toISOString()}>
+                <line
+                  x1={CHART_LEFT_PAD + i * adjustedWeekWidth}
+                  y1={CHART_TOP_PAD - 30}
+                  x2={CHART_LEFT_PAD + i * adjustedWeekWidth}
+                  y2={chartHeight - 10}
+                  stroke="#eee"
+                />
+                {/* Clickable week header */}
+                <rect
+                  x={CHART_LEFT_PAD + i * adjustedWeekWidth}
+                  y={CHART_TOP_PAD - 40}
+                  width={adjustedWeekWidth}
+                  height={20}
+                  fill="transparent"
+                  cursor="pointer"
+                  onClick={() => handleWeekClick(i)}
+                  style={{ pointerEvents: 'all' }}
+                />
+                {/* Week labels - show all weeks with conditional rotation for narrow columns */}
+                <text
+                  x={labelX}
+                  y={labelY}
+                  fontSize={isNarrowColumn ? 8 : 10}
+                  textAnchor="middle"
+                  fill={isSelected ? '#3b82f6' : isCurrent ? '#d97706' : '#888'}
+                  fontWeight={isSelected || isCurrent ? 'bold' : 'normal'}
+                  textDecoration={isSelected ? 'underline' : isCurrent ? 'underline' : 'none'}
+                  transform={isNarrowColumn ? `rotate(-45, ${labelX}, ${labelY})` : ''}
+                  style={{ pointerEvents: 'none' }}
+                >
+                  {isNarrowColumn 
+                    ? w.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' })
+                    : w.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                  }
+                </text>
+              </g>
+            );
+          })}
+          {/* Date axis - extend full width of chart */}
+          <line 
+            x1={CHART_LEFT_PAD} 
+            y1={CHART_TOP_PAD + 5} 
+            x2={CHART_LEFT_PAD + weekCount * adjustedWeekWidth} 
+            y2={CHART_TOP_PAD + 5} 
+            stroke="#bbb" 
           />
-        )}
-        {/* Week grid lines and labels */}
-        {weekStarts.map((w, i) => {
-          const isNarrowColumn = adjustedWeekWidth < 60;
-          const labelX = CHART_LEFT_PAD + i * adjustedWeekWidth + adjustedWeekWidth / 2;
-          const labelY = isNarrowColumn ? CHART_TOP_PAD - 5 : CHART_TOP_PAD - 10;
           
-          return (
-            <g key={w.toISOString()}>
-              <line
-                x1={CHART_LEFT_PAD + i * adjustedWeekWidth}
-                y1={CHART_TOP_PAD - 30}
-                x2={CHART_LEFT_PAD + i * adjustedWeekWidth}
-                y2={chartHeight - 10}
-                stroke="#eee"
-              />
-              {/* Week labels - show all weeks with conditional rotation for narrow columns */}
-              <text
-                x={labelX}
-                y={labelY}
-                fontSize={isNarrowColumn ? 8 : 10}
-                textAnchor="middle"
-                fill={i === currentWeekIdx ? '#d97706' : '#888'}
-                fontWeight={i === currentWeekIdx ? 'bold' : 'normal'}
-                textDecoration={i === currentWeekIdx ? 'underline' : 'none'}
-                transform={isNarrowColumn ? `rotate(-45, ${labelX}, ${labelY})` : ''}
-              >
-                {isNarrowColumn 
-                  ? w.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' })
-                  : w.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-                }
-              </text>
-            </g>
-          );
-        })}
-        {/* Date axis - extend full width of chart */}
-        <line 
-          x1={CHART_LEFT_PAD} 
-          y1={CHART_TOP_PAD + 5} 
-          x2={CHART_LEFT_PAD + weekCount * adjustedWeekWidth} 
-          y2={CHART_TOP_PAD + 5} 
-          stroke="#bbb" 
-        />
-        {sorted.map((proj, i) => {
-          const y = CHART_TOP_PAD + i * (BAR_HEIGHT + BAR_GAP);
-          const x1 = dateToX(proj.startDate);
-          const barWidth = getProjectWidth(proj.startDate, proj.targetDate);
-          const color = getProjectColor(proj, pools);
-          // Tooltip calculations
-          const pool = pools.find(p => p.name === proj.pool);
-          const poolWeeklyHours = pool?.weeklyHours || 40;
-          const allocationPercent = proj.status?.toLowerCase() === 'complete' ? 0 : (proj.weeklyAllocation || 0);
-          const allocationHours = Math.round((allocationPercent / 100) * 40 * 10) / 10;
-          const estHoursLeft = Math.round((proj.estimatedHours * (1 - (proj.progress || 0) / 100)) * 10) / 10;
-          // Find current week
-          const today = new Date(); today.setHours(0,0,0,0);
-          const currentWeekStart = weekStarts[currentWeekIdx >= 0 ? currentWeekIdx : 0];
-          const currentWeekEnd = new Date(currentWeekStart.getTime() + 6 * 24 * 60 * 60 * 1000);
-          const concurrent = getCurrentWeekConcurrentProjects(projects, proj.pool, currentWeekStart, currentWeekEnd);
-          const concurrentCount = concurrent.length || 1;
-          const allocatedThisWeek = poolWeeklyHours * (allocationPercent / 100) / concurrentCount;
-          
-          // Check if this project's pool is over-allocated AND this project has work in current week
-          const poolUtilization = calculatePoolUtilization(projects, pools, proj.pool, currentWeekStart, currentWeekEnd);
-          const hasWorkThisWeek = allocationPercent > 0 && 
-            new Date(proj.startDate) <= currentWeekEnd && 
-            new Date(proj.targetDate) >= currentWeekStart &&
-            !proj.status?.toLowerCase().includes('complete');
-          const isOverAllocated = poolUtilization.isOverAllocated && hasWorkThisWeek;
-          
-          return (
-            <g key={proj.name}>
-              {/* Tooltip for full project name, status, notes, allocation */}
-              <title>
-                {proj.name}
-                {proj.status ? `\nStatus: ${proj.status}` : ''}
-                {proj.notes ? `\n${proj.notes}` : ''}
-                {`\nWeekly Allocation: ${allocationPercent}% (${allocationHours}h)`}
-                {`\nEstimated Hours: ${estHoursLeft} of ${proj.estimatedHours}h`}
-                {`\nAllocated This Week: ${Math.round(allocatedThisWeek * 10) / 10}h (of ${poolWeeklyHours}h pool, ${concurrentCount} concurrent)`}
-                {isOverAllocated ? `\n⚠️ POOL OVER-ALLOCATED: ${poolUtilization.totalAllocated}h of ${poolUtilization.poolHours}h (${poolUtilization.utilization}%)` : ''}
-              </title>
-              {/* Bar */}
-              <rect 
-                x={x1} 
-                y={y+20} 
-                width={barWidth} 
-                height={BAR_HEIGHT} 
-                fill={color} 
-                rx={6}
-                stroke={isOverAllocated ? '#dc2626' : 'none'}
-                strokeWidth={isOverAllocated ? 2 : 0}
-              />
-              {/* Project name */}
-              <text x={24} y={y + BAR_HEIGHT / 2 + 25} fontSize={12} fontWeight="bold" fill="#222">
-                {truncateName(proj.name)}
-              </text>
-              {/* Pool color indicator */}
-              <rect 
-                x={8} 
-                y={y + 23} 
-                width={12} 
-                height={12} 
-                fill={getPoolColor(proj.pool, pools)} 
-                rx={2}
-                stroke={isOverAllocated ? '#dc2626' : '#ccc'}
-                strokeWidth={isOverAllocated ? 1.5 : 0.5}
-              />
-              {/* Over-allocation warning indicator */}
-              {isOverAllocated && (
-                <text x={22} y={y + 18} fontSize={12} fill="#dc2626" fontWeight="bold">
-                  ⚠️
+          {/* Virtual scrolling: Only render visible project rows */}
+          {sorted.slice(visibleRange.start, visibleRange.end).map((proj, index) => {
+            const actualIndex = visibleRange.start + index;
+            const y = CHART_TOP_PAD + actualIndex * (BAR_HEIGHT + BAR_GAP);
+            const x1 = dateToX(proj.startDate);
+            const barWidth = getProjectWidth(proj.startDate, proj.targetDate);
+            const color = getProjectColor(proj, pools);
+            
+            // Tooltip calculations
+            const pool = pools.find(p => p.name === proj.pool);
+            const poolWeeklyHours = pool?.weeklyHours || 40;
+            const allocationPercent = proj.status?.toLowerCase() === 'complete' ? 0 : (proj.weeklyAllocation || 0);
+            const allocationHours = Math.round((allocationPercent / 100) * (pool?.standardWeekHours || 40) * 10) / 10;
+            const estHoursLeft = Math.round((proj.estimatedHours * (1 - (proj.progress || 0) / 100)) * 10) / 10;
+            
+            // Find current week
+            const currentWeekStart = weekStarts[currentWeekIdx >= 0 ? currentWeekIdx : 0];
+            const currentWeekEnd = new Date(currentWeekStart.getTime() + 6 * 24 * 60 * 60 * 1000);
+            const concurrent = getCurrentWeekConcurrentProjects(projects, proj.pool, currentWeekStart, currentWeekEnd);
+            const concurrentCount = concurrent.length || 1;
+            const allocatedThisWeek = poolWeeklyHours * (allocationPercent / 100) / concurrentCount;
+            
+            // Check if this project's pool is over-allocated AND this project has work in current week
+            const poolUtilization = calculatePoolUtilization(projects, pools, proj.pool, currentWeekStart, currentWeekEnd);
+            const hasWorkThisWeek = allocationPercent > 0 && 
+              new Date(proj.startDate) <= currentWeekEnd && 
+              new Date(proj.targetDate) >= currentWeekStart &&
+              !proj.status?.toLowerCase().includes('complete');
+            const isOverAllocated = poolUtilization.isOverAllocated && hasWorkThisWeek;
+            
+            return (
+              <g key={proj.name}>
+                {/* Tooltip for full project name, status, notes, allocation */}
+                <title>
+                  {proj.name}
+                  {proj.status ? `\nStatus: ${proj.status}` : ''}
+                  {proj.notes ? `\n${proj.notes}` : ''}
+                  {`\nWeekly Allocation: ${allocationPercent}% (${allocationHours}h of ${proj.estimatedHours}h total)`}
+                  {`\nEstimated Hours: ${estHoursLeft} of ${proj.estimatedHours}h remaining`}
+                  {`\nAllocated This Week: ${Math.round(allocatedThisWeek * 10) / 10}h (of ${poolWeeklyHours}h pool, ${concurrentCount} concurrent)`}
+                  {isOverAllocated ? `\n⚠️ POOL OVER-ALLOCATED: ${poolUtilization.totalAllocated}h of ${poolUtilization.availableHours}h available (${poolUtilization.utilization}%)` : ''}
+                </title>
+                {/* Bar */}
+                <rect 
+                  x={x1} 
+                  y={y+20} 
+                  width={barWidth} 
+                  height={BAR_HEIGHT} 
+                  fill={color} 
+                  rx={6}
+                  stroke={isOverAllocated ? '#dc2626' : 'none'}
+                  strokeWidth={isOverAllocated ? 2 : 0}
+                />
+                {/* Project name */}
+                <text x={24} y={y + BAR_HEIGHT / 2 + 25} fontSize={12} fontWeight="bold" fill="#222">
+                  {truncateName(proj.name)}
                 </text>
-              )}
-              {/* Percent complete */}
-              {typeof proj.progress === 'number' && (
-                <text x={x1 + barWidth - 80} y={y + BAR_HEIGHT / 2 + 25} fontSize={13} fill="#fff" textAnchor="end" fontWeight="bold">
-                  {proj.progress}%
+                {/* Pool color indicator */}
+                <rect 
+                  x={8} 
+                  y={y + 23} 
+                  width={12} 
+                  height={12} 
+                  fill={getPoolColor(proj.pool, pools)} 
+                  rx={2}
+                  stroke={isOverAllocated ? '#dc2626' : '#ccc'}
+                  strokeWidth={isOverAllocated ? 1.5 : 0.5}
+                />
+                {/* Over-allocation warning indicator */}
+                {isOverAllocated && (
+                  <text x={22} y={y + 18} fontSize={12} fill="#dc2626" fontWeight="bold">
+                    ⚠️
+                  </text>
+                )}
+                {/* Percent complete */}
+                {typeof proj.progress === 'number' && (
+                  <text x={x1 + barWidth - 80} y={y + BAR_HEIGHT / 2 + 25} fontSize={13} fill="#fff" textAnchor="end" fontWeight="bold">
+                    {proj.progress}%
+                  </text>
+                )}
+                {/* Target date label inside the bar, right-aligned */}
+                <text x={x1 + barWidth - 8} y={y + BAR_HEIGHT / 2 + 25} fontSize={10} fill="#fff" textAnchor="end">
+                  {proj.targetDate}
                 </text>
-              )}
-              {/* Target date label inside the bar, right-aligned */}
-              <text x={x1 + barWidth - 8} y={y + BAR_HEIGHT / 2 + 25} fontSize={10} fill="#fff" textAnchor="end">
-                {proj.targetDate}
-              </text>
-            </g>
-          );
-        })}
-      </svg>
+              </g>
+            );
+          })}
+          {/* Meeting Hours Indicators */}
+          {renderMeetingHoursIndicators(projects, pools, weekStarts, adjustedWeekWidth, CHART_TOP_PAD)}
+        </svg>
+      </div>
     </div>
   );
 };

@@ -1,6 +1,9 @@
 export interface PoolData {
   name: string;
   weeklyHours: number;
+  standardWeekHours: number; // Standard work week hours (default: 40)
+  supportHours: number; // Reserved hours for support activities
+  meetingHours: number; // Reserved hours for weekly meetings
   description: string;
   color?: string;
   lastModified?: string; // ISO timestamp

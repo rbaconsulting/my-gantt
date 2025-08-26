@@ -24,8 +24,8 @@ interface ConflictResult {
   type: 'project' | 'pool';
   name: string;
   action: 'updated' | 'kept' | 'added' | 'deleted';
-  existingData?: any;
-  importedData?: any;
+  existingData?: ProjectFormData | PoolData;
+  importedData?: ProjectFormData | PoolData;
   reason?: string;
 }
 
@@ -60,7 +60,7 @@ function analyzeProjectConflicts(
         'estimatedHours', 'progress', 'status', 'weeklyAllocation', 'notes'
       ];
       const isIdentical = fieldsToCompare.every(
-        (field) => (existing as any)[field] === (importedProject as any)[field]
+        (field) => (existing as unknown as Record<string, unknown>)[field] === (importedProject as unknown as Record<string, unknown>)[field]
       );
       if (isIdentical) {
         results.push({
@@ -274,7 +274,7 @@ const ExportPanel: React.FC<ExportPanelProps> = ({ projects, pools, filters, onI
       const requiredProjectFields = ['name', 'sponsor', 'pool', 'startDate', 'targetDate', 'estimatedHours'];
       const requiredPoolFields = ['name', 'weeklyHours'];
 
-      parsedData.projects.forEach((proj: any, index: number) => {
+      parsedData.projects.forEach((proj: Record<string, unknown>, index: number) => {
         requiredProjectFields.forEach(field => {
           if (!(field in proj)) {
             throw new Error(`Project ${index + 1} missing required field: ${field}`);
@@ -282,7 +282,7 @@ const ExportPanel: React.FC<ExportPanelProps> = ({ projects, pools, filters, onI
         });
       });
 
-      parsedData.pools.forEach((pool: any, index: number) => {
+      parsedData.pools.forEach((pool: Record<string, unknown>, index: number) => {
         requiredPoolFields.forEach(field => {
           if (!(field in pool)) {
             throw new Error(`Pool ${index + 1} missing required field: ${field}`);
@@ -488,8 +488,9 @@ const ExportPanel: React.FC<ExportPanelProps> = ({ projects, pools, filters, onI
         setConflictResults(analyzeProjectConflicts(projects, projects));
         setShowConflictSummary(true);
         setImportApplied(false);
-      } catch (err: any) {
-        setCsvImportError(err.message || 'Invalid CSV format');
+      } catch (err: unknown) {
+        const errorMessage = err instanceof Error ? err.message : 'Invalid CSV format';
+        setCsvImportError(errorMessage);
       }
     };
     reader.readAsText(file);

@@ -1,35 +1,45 @@
-import { useState, useEffect } from 'react'; 
+import { useState, useEffect } from 'react';
 import './App.css';
+import GanttChart from './GanttChart';
 import ProjectForm from './ProjectForm';
 import PoolForm from './PoolForm';
-import GanttChart from './GanttChart';
-import FilterPanel from './FilterPanel';
 import BulkUpdateForm from './BulkUpdateForm';
+import FilterPanel from './FilterPanel';
 import ExportPanel from './ExportPanel';
-import type { PoolData, ProjectFormData } from './types';
+import ErrorBoundary from './ErrorBoundary';
+import type { ProjectFormData, PoolData } from './types';
 
 type TabType = 'projects' | 'pools' | 'bulk-update' | 'export';
 
 // Sample default data for testing
 const defaultPools: PoolData[] = [
   {
-    name: 'Pool 1',
+    name: 'Development Team',
     weeklyHours: 40,
-    description: 'Demo pool 1',
+    standardWeekHours: 40,
+    supportHours: 0,
+    meetingHours: 0,
+    description: 'Core development team for software projects',
     color: '#4F8EF7',
     lastModified: new Date().toISOString()
   },
   {
-    name: 'Pool 2',
-    weeklyHours: 35,
-    description: 'Demo pool 2',
+    name: 'QA Team',
+    weeklyHours: 40,
+    standardWeekHours: 40,
+    supportHours: 0,
+    meetingHours: 0,
+    description: 'Quality assurance and testing team',
     color: '#34C759',
     lastModified: new Date().toISOString()
   },
   {
-    name: 'Pool 3',
-    weeklyHours: 30,
-    description: 'Demo pool 3',
+    name: 'DevOps Team',
+    weeklyHours: 40,
+    standardWeekHours: 40,
+    supportHours: 0,
+    meetingHours: 0,
+    description: 'Infrastructure and deployment team',
     color: '#FF9500',
     lastModified: new Date().toISOString()
   }
@@ -67,6 +77,8 @@ function App() {
   const [pools, setPools] = useState<PoolData[]>([]);
   const [selectedProjectIndex, setSelectedProjectIndex] = useState<number | null>(null);
   const [selectedPoolIndex, setSelectedPoolIndex] = useState<number | null>(null);
+  const [selectedWeekIndex, setSelectedWeekIndex] = useState<number | null>(null);
+  const [selectedWeekStart, setSelectedWeekStart] = useState<Date | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>('projects');
   const [showGantt, setShowGantt] = useState(true);
   const [projectVisibility, setProjectVisibility] = useState<{ [name: string]: boolean }>({});
@@ -254,20 +266,44 @@ function App() {
   };
 
   const handleImport = (importedData: { projects: ProjectFormData[]; pools: PoolData[] }) => {
-    // Conflict resolution logic
-    const mergedProjects = [...importedData.projects];
-    const mergedPools = [...importedData.pools];
+    setProjects(importedData.projects);
+    setPools(importedData.pools);
+  };
 
-    setProjects(mergedProjects);
-    setPools(mergedPools);
-
-    // Immediately update localStorage to purge deleted items
-    localStorage.setItem('gantt-projects', JSON.stringify(mergedProjects));
-    localStorage.setItem('gantt-pools', JSON.stringify(mergedPools));
+  const handleWeekSelect = (weekIndex: number | null, weekStart: Date | null) => {
+    setSelectedWeekIndex(weekIndex);
+    setSelectedWeekStart(weekStart);
   };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', maxWidth: '1200px', minWidth: '1200px', margin: '0 auto' }}>
+      {/* Help Link */}
+      <div style={{ 
+        position: 'fixed', 
+        top: '1rem', 
+        right: '1rem', 
+        zIndex: 1000 
+      }}>
+        <a 
+          href="https://github.com/rbaconsulting/my-gantt/blob/main/USER_GUIDE.md" 
+          target="_blank" 
+          rel="noopener noreferrer"
+          style={{
+            padding: '0.5rem 1rem',
+            fontSize: '14px',
+            borderRadius: '4px',
+            border: '1px solid #6b7280',
+            background: 'white',
+            color: '#6b7280',
+            textDecoration: 'none',
+            cursor: 'pointer',
+            boxShadow: '0 1px 4px #0001',
+          }}
+          title="Open User Guide"
+        >
+          📖 Help
+        </a>
+      </div>
       <button
         onClick={() => setShowGantt((prev) => !prev)}
         style={{
@@ -291,11 +327,14 @@ function App() {
             pools={pools} 
             onFiltersChange={handleFiltersChange} 
           />
-          <GanttChart 
-            projects={projects.filter(p => projectVisibility[p.name])} 
-            pools={pools} 
-            filters={filters}
-          />
+          <ErrorBoundary>
+            <GanttChart 
+              projects={projects.filter(p => projectVisibility[p.name])} 
+              pools={pools} 
+              filters={filters}
+              onWeekSelect={handleWeekSelect}
+            />
+          </ErrorBoundary>
         </div>
       )}
       <div style={{ display: 'flex', alignItems: 'flex-start', flex: 1 }}>
@@ -543,6 +582,8 @@ function App() {
               <BulkUpdateForm
                 projects={projects}
                 pools={pools}
+                selectedWeekIndex={selectedWeekIndex}
+                selectedWeekStart={selectedWeekStart}
                 onSave={handleBulkUpdateSave}
                 onCancel={handleBulkUpdateCancel}
                 onNewProject={handleBulkUpdateNewProject}

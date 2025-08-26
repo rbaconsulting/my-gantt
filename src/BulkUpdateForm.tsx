@@ -1,9 +1,35 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import type { ProjectFormData, PoolData } from './types';
+
+// Cache for pool utilization calculations
+class PoolUtilizationCache {
+  private cache = new Map<string, any>();
+  private maxAge = 1 * 60 * 1000; // 1 minute cache
+  
+  get(key: string) {
+    const cached = this.cache.get(key);
+    if (cached && Date.now() - cached.timestamp < this.maxAge) {
+      return cached.data;
+    }
+    return null;
+  }
+  
+  set(key: string, data: any) {
+    this.cache.set(key, { data, timestamp: Date.now() });
+  }
+  
+  clear() {
+    this.cache.clear();
+  }
+}
+
+const poolUtilizationCache = new PoolUtilizationCache();
 
 interface BulkUpdateFormProps {
   projects: ProjectFormData[];
   pools: PoolData[];
+  selectedWeekIndex?: number | null;
+  selectedWeekStart?: Date | null;
   onSave: (updatedProjects: ProjectFormData[]) => void;
   onCancel: () => void;
   onNewProject: () => void;
@@ -18,56 +44,87 @@ interface ConcurrentProject {
   isActive: boolean;
 }
 
-const BulkUpdateForm: React.FC<BulkUpdateFormProps> = ({ projects, pools, onSave, onCancel, onNewProject, onEditProject }) => {
-  const [concurrentProjects, setConcurrentProjects] = useState<ConcurrentProject[]>([]);
+const BulkUpdateForm: React.FC<BulkUpdateFormProps> = ({ 
+  projects, 
+  pools, 
+  selectedWeekStart, 
+  onSave, 
+  onCancel, 
+  onNewProject, 
+  onEditProject 
+}) => {
   const [selectedPool, setSelectedPool] = useState<string>('');
+  const [concurrentProjects, setConcurrentProjects] = useState<ConcurrentProject[]>([]);
 
-  // Get current week dates
-  const getCurrentWeekDates = () => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const dayOfWeek = today.getDay();
-    const startOfWeek = new Date(today);
-    startOfWeek.setDate(today.getDate() - dayOfWeek);
-    const endOfWeek = new Date(startOfWeek);
-    endOfWeek.setDate(startOfWeek.getDate() + 6);
-    return { startOfWeek, endOfWeek };
-  };
-
-  // Get projects that are active in the current week
-  const getActiveProjects = (poolName?: string) => {
-    const { startOfWeek, endOfWeek } = getCurrentWeekDates();
-    
-    return projects.filter(project => {
-      const isInPool = !poolName || project.pool === poolName;
-      const isActive = new Date(project.startDate) <= endOfWeek && 
-                      new Date(project.targetDate) >= startOfWeek &&
-                      !project.status?.toLowerCase().includes('complete');
-      // Include projects with any allocation (including 0%) that are active in the current week
-      
-      return isInPool && isActive;
-    });
-  };
+  // Pre-process projects for better performance
+  const processedProjects = useMemo(() => {
+    return projects.map(project => ({
+      pool: project.pool,
+      startDate: new Date(project.startDate),
+      endDate: new Date(project.targetDate),
+      isActive: !project.status?.toLowerCase().includes('complete'),
+      weeklyAllocation: project.weeklyAllocation || 0,
+      name: project.name
+    }));
+  }, [projects]);
 
   // Initialize concurrent projects when pool changes
   useEffect(() => {
     if (selectedPool) {
-      const activeProjects = getActiveProjects(selectedPool);
+      // Define getCurrentWeekDates inside useEffect to avoid dependency issues
+      const getCurrentWeekDates = () => {
+        // If a week is selected from the Gantt chart, use that week
+        if (selectedWeekStart) {
+          const startOfWeek = new Date(selectedWeekStart);
+          const endOfWeek = new Date(startOfWeek);
+          endOfWeek.setDate(endOfWeek.getDate() + 6);
+          return { startOfWeek, endOfWeek };
+        }
+        
+        // Otherwise, use the current week
+        const now = new Date();
+        const startOfWeek = new Date(now);
+        startOfWeek.setDate(now.getDate() - now.getDay());
+        startOfWeek.setHours(0, 0, 0, 0);
+        
+        const endOfWeek = new Date(startOfWeek);
+        endOfWeek.setDate(startOfWeek.getDate() + 6);
+        endOfWeek.setHours(23, 59, 59, 999);
+        
+        return { startOfWeek, endOfWeek };
+      };
+      
+      const { startOfWeek, endOfWeek } = getCurrentWeekDates();
+      
+      // Use pre-processed projects for better performance
+      const activeProjects = processedProjects.filter(project => {
+        const isInPool = project.pool === selectedPool;
+        const isActive = project.startDate <= endOfWeek && 
+                        project.endDate >= startOfWeek &&
+                        project.isActive;
+        return isInPool && isActive;
+      });
+      
       const pool = pools.find(p => p.name === selectedPool);
       
       const concurrent: ConcurrentProject[] = activeProjects.map(project => ({
-        project,
-        currentAllocation: project.weeklyAllocation || 0,
-        newAllocation: project.weeklyAllocation || 0,
+        project: projects.find(p => p.name === project.name)!,
+        currentAllocation: project.weeklyAllocation,
+        newAllocation: project.weeklyAllocation,
         pool: pool!,
-        isActive: (project.weeklyAllocation || 0) > 0 // Only active if they have allocation
+        isActive: project.weeklyAllocation > 0 // Only active if they have allocation
       }));
 
       setConcurrentProjects(concurrent);
     } else {
       setConcurrentProjects([]);
     }
-  }, [selectedPool, projects, pools]);
+  }, [selectedPool, processedProjects, pools, selectedWeekStart, projects]);
+
+  // Clear cache when concurrent projects change
+  useEffect(() => {
+    poolUtilizationCache.clear();
+  }, [concurrentProjects]);
 
   const handleAllocationChange = (projectName: string, newAllocation: number) => {
     setConcurrentProjects(prev => 
@@ -98,18 +155,40 @@ const BulkUpdateForm: React.FC<BulkUpdateFormProps> = ({ projects, pools, onSave
   const getPoolUtilization = () => {
     if (!selectedPool) return { totalAllocated: 0, poolHours: 0, utilization: 0 };
     
+    // Create cache key for this calculation
+    const cacheKey = `${selectedPool}-${concurrentProjects.map(cp => `${cp.project.name}:${cp.newAllocation}`).join(',')}`;
+    
+    // Check cache first
+    const cached = poolUtilizationCache.get(cacheKey);
+    if (cached) {
+      return cached;
+    }
+    
     const pool = pools.find(p => p.name === selectedPool);
     if (!pool) return { totalAllocated: 0, poolHours: 0, utilization: 0 };
     
     const totalAllocated = calculateTotalAllocation();
-    const utilization = (totalAllocated / 100) * 40; // Convert percentage to hours
-    const utilizationPercent = (utilization / pool.weeklyHours) * 100;
+    // Use pool's standard week hours instead of hardcoded 40
+    const standardWeekHours = pool.standardWeekHours || 40;
+    const utilization = (totalAllocated / 100) * standardWeekHours;
     
-    return {
+    // Account for reserved hours (support and meetings)
+    const reservedHours = (pool.supportHours || 0) + (pool.meetingHours || 0);
+    const availableHours = pool.weeklyHours - reservedHours;
+    const utilizationPercent = (utilization / availableHours) * 100;
+    
+    const result = {
       totalAllocated: Math.round(utilization * 10) / 10,
       poolHours: pool.weeklyHours,
+      availableHours: Math.round(availableHours * 10) / 10,
+      reservedHours: Math.round(reservedHours * 10) / 10,
       utilization: Math.round(utilizationPercent * 10) / 10
     };
+    
+    // Cache the result
+    poolUtilizationCache.set(cacheKey, result);
+    
+    return result;
   };
 
   const handleSave = () => {
@@ -143,8 +222,8 @@ const BulkUpdateForm: React.FC<BulkUpdateFormProps> = ({ projects, pools, onSave
     );
   };
 
-  const { totalAllocated, poolHours, utilization } = getPoolUtilization();
-  const isOverAllocated = totalAllocated > poolHours;
+  const { totalAllocated, poolHours, availableHours, reservedHours, utilization } = getPoolUtilization();
+  const isOverAllocated = totalAllocated > (availableHours || 0);
 
   return (
     <div style={{ 
@@ -155,7 +234,20 @@ const BulkUpdateForm: React.FC<BulkUpdateFormProps> = ({ projects, pools, onSave
       border: '1px solid #e9ecef'
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-        <h2 style={{ margin: 0, color: '#000' }}>Bulk Update - Current Week Allocation</h2>
+        <div>
+          <h2 style={{ margin: 0, color: '#000' }}>
+            Bulk Update - {selectedWeekStart ? 'Selected Week' : 'Current Week'} Allocation
+          </h2>
+          {selectedWeekStart && (
+            <div style={{ fontSize: '14px', color: '#666', marginTop: '0.25rem' }}>
+              Week of {selectedWeekStart.toLocaleDateString('en-US', { 
+                month: 'short', 
+                day: 'numeric',
+                year: 'numeric'
+              })}
+            </div>
+          )}
+        </div>
         <button
           onClick={onNewProject}
           style={{
@@ -209,10 +301,15 @@ const BulkUpdateForm: React.FC<BulkUpdateFormProps> = ({ projects, pools, onSave
           }}>
             <h3 style={{ margin: '0 0 0.5rem 0', color: '#000' }}>Pool Utilization</h3>
             <div style={{ fontSize: '14px', color: '#000' }}>
-              <strong>{selectedPool}</strong>: {totalAllocated}h allocated of {poolHours}h available ({utilization}% utilization)
+              <strong>{selectedPool}</strong>: {totalAllocated}h allocated of {availableHours || 0}h available ({utilization}% utilization)
+              {(reservedHours || 0) > 0 && (
+                <div style={{ fontSize: '12px', color: '#666', marginTop: '0.25rem' }}>
+                  {poolHours}h total - {reservedHours || 0}h reserved (Support: {pools.find(p => p.name === selectedPool)?.supportHours || 0}h, Meetings: {pools.find(p => p.name === selectedPool)?.meetingHours || 0}h)
+                </div>
+              )}
               {isOverAllocated && (
                 <div style={{ color: '#dc2626', fontWeight: 'bold', marginTop: '0.5rem' }}>
-                  ⚠️ OVER-ALLOCATED: {totalAllocated - poolHours}h over capacity
+                  ⚠️ OVER-ALLOCATED: {totalAllocated - (availableHours || 0)}h over capacity
                 </div>
               )}
             </div>
@@ -330,7 +427,6 @@ Pool: ${cp.project.pool} (${poolWeeklyHours}h/week)`}
                           type="number"
                           min="0"
                           max="100"
-                          step="5"
                           value={cp.newAllocation}
                           onChange={(e) => {
                             e.stopPropagation();
