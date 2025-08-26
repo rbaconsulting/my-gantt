@@ -415,7 +415,7 @@ const GanttChart: React.FC<GanttChartProps> = ({ projects, pools, filters, onWee
   // Initialize Web Worker
   useEffect(() => {
     if (typeof window !== 'undefined' && 'Worker' in window) {
-      const newWorker = new Worker('/utilization-worker.js');
+      const newWorker = new Worker('./utilization-worker.js');
       
       newWorker.onmessage = (e) => {
         const { type, data } = e.data;
