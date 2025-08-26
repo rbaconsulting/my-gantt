@@ -546,6 +546,7 @@ function App() {
                   onSave={handleSaveProject}
                   onCancel={handleCancelProject}
                   pools={pools}
+                  projects={projects}
                 />
               ) : (
                 <div style={{ textAlign: 'center' }}>

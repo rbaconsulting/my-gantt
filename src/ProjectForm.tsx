@@ -6,6 +6,7 @@ interface ProjectFormProps {
   onSave?: (data: ProjectFormData) => void;
   onCancel?: () => void;
   pools: PoolData[];
+  projects?: ProjectFormData[]; // Add projects to calculate over-allocation
 }
 
 const initialForm: ProjectFormData = {
@@ -21,9 +22,64 @@ const initialForm: ProjectFormData = {
   notes: '',
 };
 
-const ProjectForm: React.FC<ProjectFormProps> = ({ initialData, onSave, onCancel, pools }) => {
+const ProjectForm: React.FC<ProjectFormProps> = ({ initialData, onSave, onCancel, pools, projects }) => {
   const [form, setForm] = useState<ProjectFormData>(initialForm);
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
+
+  // Calculate over-allocation warnings
+  const getOverAllocationWarning = () => {
+    if (!form.pool || !form.weeklyAllocation || form.weeklyAllocation <= 0) return null;
+    
+    const selectedPool = pools.find(p => p.name === form.pool);
+    if (!selectedPool) return null;
+
+    // Calculate what the project would contribute to pool utilization
+    const projectHoursPerWeek = (form.weeklyAllocation / 100) * (selectedPool.standardWeekHours || 40);
+    
+    // Calculate current pool utilization from other projects (excluding this project if editing)
+    const otherProjectsInPool = (projects || []).filter((p: ProjectFormData) => 
+      p.pool === form.pool && 
+      p.name !== form.name && // Exclude current project if editing
+      p.status !== 'Complete' && // Exclude completed projects
+      (p.weeklyAllocation || 0) > 0
+    );
+    
+    const otherProjectsHours = otherProjectsInPool.reduce((total: number, p: ProjectFormData) => {
+      return total + (((p.weeklyAllocation || 0) / 100) * (selectedPool.standardWeekHours || 40));
+    }, 0);
+    
+    // Calculate total allocation if this project is added/updated
+    const totalAllocation = otherProjectsHours + projectHoursPerWeek;
+    
+    // Calculate available hours in the pool
+    const reservedHours = (selectedPool.supportHours || 0) + (selectedPool.meetingHours || 0);
+    const availableHours = selectedPool.weeklyHours - reservedHours;
+    
+    // Check if this project would cause over-allocation
+    if (totalAllocation > availableHours) {
+      return {
+        severity: 'high',
+        message: `⚠️ This project would cause OVER-ALLOCATION in the pool!`,
+        details: `Total allocation: ${totalAllocation.toFixed(1)}h/week, Available: ${availableHours.toFixed(1)}h/week. This project adds ${projectHoursPerWeek.toFixed(1)}h/week.`,
+        currentProjects: otherProjectsInPool.length
+      };
+    }
+    
+    // Warning for high allocation
+    const utilizationPercent = (totalAllocation / availableHours) * 100;
+    if (utilizationPercent > 80) {
+      return {
+        severity: 'medium',
+        message: `⚠️ This project would use ${utilizationPercent.toFixed(1)}% of available pool hours.`,
+        details: `Total allocation: ${totalAllocation.toFixed(1)}h/week, Available: ${availableHours.toFixed(1)}h/week. Consider reducing allocation.`,
+        currentProjects: otherProjectsInPool.length
+      };
+    }
+    
+    return null;
+  };
+
+  const overAllocationWarning = getOverAllocationWarning();
 
   useEffect(() => {
     if (initialData) {
@@ -242,6 +298,44 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ initialData, onSave, onCancel
         </small>
         {errors.weeklyAllocation && <span style={{ color: 'red' }}>{errors.weeklyAllocation}</span>}
       </label>
+
+      {/* Over-allocation Warning */}
+      {overAllocationWarning && (
+        <div style={{ 
+          padding: '12px', 
+          backgroundColor: overAllocationWarning.severity === 'high' ? '#fef2f2' : '#fffbeb',
+          borderRadius: '6px', 
+          fontSize: '14px', 
+          border: `2px solid ${overAllocationWarning.severity === 'high' ? '#dc2626' : '#f59e0b'}`,
+          width: '100%',
+          boxSizing: 'border-box',
+          marginTop: '8px'
+        }}>
+          <div style={{ 
+            fontWeight: 'bold', 
+            color: overAllocationWarning.severity === 'high' ? '#dc2626' : '#92400e',
+            marginBottom: '8px' 
+          }}>
+            {overAllocationWarning.message}
+          </div>
+          <div style={{ 
+            color: overAllocationWarning.severity === 'high' ? '#dc2626' : '#92400e', 
+            fontSize: '13px',
+            marginBottom: '8px'
+          }}>
+            {overAllocationWarning.details}
+          </div>
+          {overAllocationWarning.currentProjects > 0 && (
+            <div style={{ 
+              color: '#666', 
+              fontSize: '12px',
+              fontStyle: 'italic'
+            }}>
+              ℹ️ There are {overAllocationWarning.currentProjects} other active project(s) in this pool.
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Date Section with Auto-calculation Info */}
       <div style={{ 
