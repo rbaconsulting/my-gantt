@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import type { ProjectFormData, PoolData } from './types';
 
 interface ProjectFormProps {
@@ -26,11 +26,12 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ initialData, onSave, onCancel
   const [form, setForm] = useState<ProjectFormData>(initialForm);
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
 
+  const selectedPool = useMemo(() => pools.find(p => p.name === form.pool), [pools, form.pool]);
+
   // Calculate over-allocation warnings
   const getOverAllocationWarning = () => {
     if (!form.pool || !form.weeklyAllocation || form.weeklyAllocation <= 0) return null;
     
-    const selectedPool = pools.find(p => p.name === form.pool);
     if (!selectedPool) return null;
 
     // Calculate what the project would contribute to pool utilization
@@ -79,30 +80,34 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ initialData, onSave, onCancel
     return null;
   };
 
-  const overAllocationWarning = getOverAllocationWarning();
+  const overAllocationWarning = useMemo(() => getOverAllocationWarning(), [form.pool, form.weeklyAllocation, form.estimatedHours, form.name, projects, pools]);
 
   // Calculate dynamic duration based on estimated hours and weekly allocation
-  const getCalculatedDuration = () => {
+  const calculatedDuration = useMemo(() => {
     if (!form.estimatedHours || !form.weeklyAllocation || form.weeklyAllocation <= 0) return null;
     
-    const selectedPool = pools.find(p => p.name === form.pool);
     const standardWeekHours = selectedPool?.standardWeekHours || 40;
     const availableHoursPerWeek = (form.weeklyAllocation / 100) * standardWeekHours;
     
     if (availableHoursPerWeek <= 0) return null;
     
-    const workDaysNeeded = Math.ceil(form.estimatedHours / availableHoursPerWeek);
-    const weeksNeeded = Math.ceil(form.estimatedHours / availableHoursPerWeek);
+    // Calculate weeks needed (can be fractional)
+    const weeksNeeded = form.estimatedHours / availableHoursPerWeek;
+    
+    // Calculate work days needed (assuming 5 work days per week)
+    const workDaysNeeded = Math.ceil(weeksNeeded * 5);
+    
+    // Calculate calendar weeks (rounded up for planning purposes)
+    const calendarWeeksNeeded = Math.ceil(weeksNeeded);
     
     return {
       workDays: workDaysNeeded,
       weeks: weeksNeeded,
+      calendarWeeks: calendarWeeksNeeded,
       hoursPerWeek: availableHoursPerWeek,
-      estimatedWeeks: (form.estimatedHours / availableHoursPerWeek).toFixed(1)
+      estimatedWeeks: weeksNeeded.toFixed(1)
     };
-  };
-
-  const calculatedDuration = getCalculatedDuration();
+  }, [form.estimatedHours, form.weeklyAllocation, form.pool, pools]);
 
   useEffect(() => {
     if (initialData) {
@@ -130,15 +135,27 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ initialData, onSave, onCancel
     if (name === 'startDate' && value && !form.targetDate && form.estimatedHours > 0 && (form.weeklyAllocation || 0) > 0) {
       // Calculate end date based on start date, estimated hours, and weekly allocation
       const startDate = new Date(value);
-      const availableHoursPerWeek = ((form.weeklyAllocation || 0) / 100) * (selectedPool?.standardWeekHours || 40); // Convert percentage to hours
-      const workDaysNeeded = Math.ceil(form.estimatedHours / availableHoursPerWeek);
+      const availableHoursPerWeek = ((form.weeklyAllocation || 0) / 100) * (selectedPool?.standardWeekHours || 40);
+      
+      // Calculate weeks needed (can be fractional)
+      const weeksNeeded = form.estimatedHours / availableHoursPerWeek;
+      
+      // Convert weeks to work days (assuming 5 work days per week)
+      const workDaysNeeded = Math.ceil(weeksNeeded * 5);
+      
       const endDate = addWorkDays(startDate, workDaysNeeded);
       newForm.targetDate = endDate.toISOString().split('T')[0];
     } else if (name === 'targetDate' && value && !form.startDate && form.estimatedHours > 0 && (form.weeklyAllocation || 0) > 0) {
       // Calculate start date based on end date, estimated hours, and weekly allocation
       const endDate = new Date(value);
-      const availableHoursPerWeek = ((form.weeklyAllocation || 0) / 100) * (selectedPool?.standardWeekHours || 40); // Convert percentage to hours
-      const workDaysNeeded = Math.ceil(form.estimatedHours / availableHoursPerWeek);
+      const availableHoursPerWeek = ((form.weeklyAllocation || 0) / 100) * (selectedPool?.standardWeekHours || 40);
+      
+      // Calculate weeks needed (can be fractional)
+      const weeksNeeded = form.estimatedHours / availableHoursPerWeek;
+      
+      // Convert weeks to work days (assuming 5 work days per week)
+      const workDaysNeeded = Math.ceil(weeksNeeded * 5);
+      
       const startDate = subtractWorkDays(endDate, workDaysNeeded);
       newForm.startDate = startDate.toISOString().split('T')[0];
     }
@@ -246,8 +263,6 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ initialData, onSave, onCancel
     if (onCancel) onCancel();
   };
 
-  const selectedPool = pools.find(p => p.name === form.pool);
-
   return (
     <form onSubmit={handleSubmit} style={{ 
       padding: '2rem', 
@@ -347,6 +362,8 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ initialData, onSave, onCancel
           <div style={{ color: '#0c4a6e', fontSize: '13px' }}>
             <strong>Estimated Duration:</strong> {calculatedDuration.workDays} work days ({calculatedDuration.estimatedWeeks} weeks)
             <br />
+            <strong>Calendar Weeks:</strong> {calculatedDuration.calendarWeeks} weeks (rounded up for planning)
+            <br />
             <strong>Weekly Commitment:</strong> {calculatedDuration.hoursPerWeek.toFixed(1)} hours per week
             <br />
             <strong>Total Project Hours:</strong> {form.estimatedHours} hours
@@ -429,10 +446,16 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ initialData, onSave, onCancel
               cursor: 'pointer'
             }} onClick={() => {
               if (form.estimatedHours > 0 && (form.weeklyAllocation || 0) > 0 && form.targetDate) {
-                // Recalculate start date based on end date
+                // Recalculate start date based on end date using consistent logic
                 const endDate = new Date(form.targetDate);
                 const availableHoursPerWeek = ((form.weeklyAllocation || 0) / 100) * (selectedPool?.standardWeekHours || 40);
-                const workDaysNeeded = Math.ceil(form.estimatedHours / availableHoursPerWeek);
+                
+                // Calculate weeks needed (can be fractional)
+                const weeksNeeded = form.estimatedHours / availableHoursPerWeek;
+                
+                // Convert weeks to work days (assuming 5 work days per week)
+                const workDaysNeeded = Math.ceil(weeksNeeded * 5);
+                
                 const startDate = subtractWorkDays(endDate, workDaysNeeded);
                 
                 setForm(prev => ({
@@ -467,10 +490,16 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ initialData, onSave, onCancel
               cursor: 'pointer'
             }} onClick={() => {
               if (form.estimatedHours > 0 && (form.weeklyAllocation || 0) > 0 && form.startDate) {
-                // Recalculate end date based on start date
+                // Recalculate end date based on start date using consistent logic
                 const startDate = new Date(form.startDate);
                 const availableHoursPerWeek = ((form.weeklyAllocation || 0) / 100) * (selectedPool?.standardWeekHours || 40);
-                const workDaysNeeded = Math.ceil(form.estimatedHours / availableHoursPerWeek);
+                
+                // Calculate weeks needed (can be fractional)
+                const weeksNeeded = form.estimatedHours / availableHoursPerWeek;
+                
+                // Convert weeks to work days (assuming 5 work days per week)
+                const workDaysNeeded = Math.ceil(weeksNeeded * 5);
+                
                 const endDate = addWorkDays(startDate, workDaysNeeded);
                 
                 setForm(prev => ({

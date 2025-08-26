@@ -392,8 +392,6 @@ function renderMeetingHoursIndicators(projects: ProjectFormData[], pools: PoolDa
 }
 
 const GanttChart: React.FC<GanttChartProps> = ({ projects, pools, filters, onWeekSelect }) => {
-  console.log('GanttChart: Component rendering started', { projectsCount: projects.length, poolsCount: pools.length });
-  
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(1200);
   const [selectedWeekIndex, setSelectedWeekIndex] = useState<number | null>(null);
@@ -409,8 +407,6 @@ const GanttChart: React.FC<GanttChartProps> = ({ projects, pools, filters, onWee
   const [workerReady, setWorkerReady] = useState(false);
   const [isCalculating, setIsCalculating] = useState(false);
   const [cachedFutureWarnings, setCachedFutureWarnings] = useState<any[]>([]);
-
-  console.log('GanttChart: Hooks initialized');
 
   // Initialize Web Worker
   useEffect(() => {
@@ -463,7 +459,7 @@ const GanttChart: React.FC<GanttChartProps> = ({ projects, pools, filters, onWee
   }, []);
 
   // Apply filters to projects
-  const filteredProjects = projects.filter(proj => {
+  const filteredProjects = useMemo(() => projects.filter(proj => {
     // Status filter
     if (filters?.status && filters.status.length > 0) {
       if (!proj.status || !filters.status.includes(proj.status)) {
@@ -511,18 +507,22 @@ const GanttChart: React.FC<GanttChartProps> = ({ projects, pools, filters, onWee
     }
 
     return true;
-  });
+  }), [projects, filters]);
 
-  const validProjects = filteredProjects.filter(
+  const validProjects = useMemo(() => filteredProjects.filter(
     p => !isNaN(new Date(p.targetDate).getTime()) && !isNaN(new Date(p.startDate).getTime())
-  );
+  ), [filteredProjects]);
 
   // Sort projects by start date
-  const sorted = [...validProjects].sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime());
-  const { min, max } = getDateRange([
+  const sorted = useMemo(() => [...validProjects].sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime()), [validProjects]);
+  
+  // Get date range - memoized to prevent infinite loops
+  const dateRange = useMemo(() => getDateRange([
     ...sorted.map(p => ({ targetDate: p.startDate } as ProjectFormData)),
     ...sorted
-  ]);
+  ]), [sorted]);
+  
+  const { min, max } = dateRange;
   
   // Calculate chart dimensions with better handling for short date ranges
   const minChartWidth = 600;
@@ -530,7 +530,7 @@ const GanttChart: React.FC<GanttChartProps> = ({ projects, pools, filters, onWee
   const chartHeight = sorted.length * (BAR_HEIGHT + BAR_GAP) + CHART_HEIGHT_PAD;
 
   // Weeks
-  const weekStarts = getAllWeekStarts(min, max);
+  const weekStarts = useMemo(() => getAllWeekStarts(min, max), [min, max]);
   const weekCount = weekStarts.length;
   const availableWidth = chartWidth - CHART_LEFT_PAD - CHART_RIGHT_PAD;
   const weekWidth = Math.max(40, availableWidth / weekCount);
@@ -539,7 +539,7 @@ const GanttChart: React.FC<GanttChartProps> = ({ projects, pools, filters, onWee
   const adjustedWeekWidth = totalColumnsWidth > availableWidth ? availableWidth / weekCount : weekWidth;
 
   // Helper to map a date to an x position, snapped to week
-  const dateToX = (date: string) => {
+  const dateToX = useMemo(() => (date: string) => {
     const d = new Date(date);
     d.setHours(0, 0, 0, 0);
     
@@ -563,14 +563,14 @@ const GanttChart: React.FC<GanttChartProps> = ({ projects, pools, filters, onWee
       // Date is after the last week
       return CHART_LEFT_PAD + (weekCount - 1) * adjustedWeekWidth;
     }
-  };
+  }, [weekStarts, adjustedWeekWidth]);
 
   // Helper to get the width of a project bar based on start and end dates
-  const getProjectWidth = (startDate: string, endDate: string) => {
+  const getProjectWidth = useMemo(() => (startDate: string, endDate: string) => {
     const startX = dateToX(startDate);
     const endX = dateToX(endDate);
     return Math.max(adjustedWeekWidth * 0.5, endX - startX); // Minimum width of half a week
-  };
+  }, [dateToX, adjustedWeekWidth]);
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -578,18 +578,18 @@ const GanttChart: React.FC<GanttChartProps> = ({ projects, pools, filters, onWee
   const currentWeekIdx = rawCurrentWeekIdx >= 0 ? rawCurrentWeekIdx : -1;
 
   // Get unique statuses from projects
-  const uniqueStatuses = Array.from(new Set(validProjects.map(p => p.status).filter(Boolean)));
+  const uniqueStatuses = useMemo(() => Array.from(new Set(validProjects.map(p => p.status).filter(Boolean))), [validProjects]);
   
   // Get unique pools from projects
-  const uniquePools = Array.from(new Set(validProjects.map(p => p.pool).filter(Boolean)));
+  const uniquePools = useMemo(() => Array.from(new Set(validProjects.map(p => p.pool).filter(Boolean))), [validProjects]);
 
   // Calculate current week over-allocation warnings
   const currentWeekStart = weekStarts[currentWeekIdx >= 0 ? currentWeekIdx : 0];
   const currentWeekEnd = new Date(currentWeekStart.getTime() + 6 * 24 * 60 * 60 * 1000);
-  const overAllocatedPools = uniquePools.filter(poolName => {
+  const overAllocatedPools = useMemo(() => uniquePools.filter(poolName => {
     const utilization = calculatePoolUtilization(projects, pools, poolName, currentWeekStart, currentWeekEnd);
     return utilization.isOverAllocated;
-  });
+  }), [uniquePools, projects, pools, currentWeekStart, currentWeekEnd]);
 
   // Calculate future over-allocation warnings
   const futureOverAllocationWarnings = useMemo(() => {
@@ -649,16 +649,8 @@ const GanttChart: React.FC<GanttChartProps> = ({ projects, pools, filters, onWee
 
   // Early return check - but hooks must be called before this
   if (!validProjects.length) {
-    console.log('GanttChart: Early return - no valid projects');
     return <div style={{ padding: 24 }}>No projects match the current filters.</div>;
   }
-
-  console.log('GanttChart: About to render JSX', { 
-    validProjectsCount: validProjects.length, 
-    sortedCount: sorted.length,
-    chartHeight,
-    weekCount 
-  });
 
   return (
     <div ref={containerRef} style={{ width: '100%' }}>
