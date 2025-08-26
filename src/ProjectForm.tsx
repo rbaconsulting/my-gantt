@@ -81,6 +81,29 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ initialData, onSave, onCancel
 
   const overAllocationWarning = getOverAllocationWarning();
 
+  // Calculate dynamic duration based on estimated hours and weekly allocation
+  const getCalculatedDuration = () => {
+    if (!form.estimatedHours || !form.weeklyAllocation || form.weeklyAllocation <= 0) return null;
+    
+    const selectedPool = pools.find(p => p.name === form.pool);
+    const standardWeekHours = selectedPool?.standardWeekHours || 40;
+    const availableHoursPerWeek = (form.weeklyAllocation / 100) * standardWeekHours;
+    
+    if (availableHoursPerWeek <= 0) return null;
+    
+    const workDaysNeeded = Math.ceil(form.estimatedHours / availableHoursPerWeek);
+    const weeksNeeded = Math.ceil(form.estimatedHours / availableHoursPerWeek);
+    
+    return {
+      workDays: workDaysNeeded,
+      weeks: weeksNeeded,
+      hoursPerWeek: availableHoursPerWeek,
+      estimatedWeeks: (form.estimatedHours / availableHoursPerWeek).toFixed(1)
+    };
+  };
+
+  const calculatedDuration = getCalculatedDuration();
+
   useEffect(() => {
     if (initialData) {
       setForm({
@@ -299,6 +322,44 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ initialData, onSave, onCancel
         {errors.weeklyAllocation && <span style={{ color: 'red' }}>{errors.weeklyAllocation}</span>}
       </label>
 
+      {/* Dynamic Duration Calculation */}
+      {calculatedDuration && (
+        <div style={{ 
+          padding: '12px', 
+          backgroundColor: '#f0f9ff', 
+          borderRadius: '6px', 
+          fontSize: '14px', 
+          border: '1px solid #0ea5e9',
+          width: '100%',
+          boxSizing: 'border-box',
+          marginTop: '8px'
+        }}>
+          <div style={{ 
+            fontWeight: 'bold', 
+            color: '#0c4a6e', 
+            marginBottom: '8px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}>
+            ⏱️ <span>Project Duration Calculator</span>
+          </div>
+          <div style={{ color: '#0c4a6e', fontSize: '13px' }}>
+            <strong>Estimated Duration:</strong> {calculatedDuration.workDays} work days ({calculatedDuration.estimatedWeeks} weeks)
+            <br />
+            <strong>Weekly Commitment:</strong> {calculatedDuration.hoursPerWeek.toFixed(1)} hours per week
+            <br />
+            <strong>Total Project Hours:</strong> {form.estimatedHours} hours
+            {form.pool && (
+              <>
+                <br />
+                <strong>Pool Standard Week:</strong> {selectedPool?.standardWeekHours || 40} hours
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Over-allocation Warning */}
       {overAllocationWarning && (
         <div style={{ 
@@ -441,11 +502,22 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ initialData, onSave, onCancel
         {form.startDate && form.targetDate && form.estimatedHours > 0 && (form.weeklyAllocation || 0) > 0 && (
           <div style={{ marginTop: '8px', padding: '8px', backgroundColor: '#ecfdf5', borderRadius: '4px', border: '1px solid #10b981' }}>
             <div style={{ color: '#065f46', fontSize: '13px' }}>
-              <strong>Calculated Duration:</strong> {countWorkDays(new Date(form.startDate), new Date(form.targetDate))} work days
+              <strong>Actual Duration (from dates):</strong> {countWorkDays(new Date(form.startDate), new Date(form.targetDate))} work days
               <br />
               <strong>Weekly Allocation:</strong> {(form.weeklyAllocation || 0)}% ({Math.round(((form.weeklyAllocation || 0) / 100) * (selectedPool?.standardWeekHours || 40) * 10) / 10}h per week)
               <br />
               <strong>Total Project Hours:</strong> {form.estimatedHours}h
+              {calculatedDuration && (
+                <>
+                  <br />
+                  <strong>Calculated vs Actual:</strong> {calculatedDuration.workDays} calculated vs {countWorkDays(new Date(form.startDate), new Date(form.targetDate))} actual work days
+                  {Math.abs(calculatedDuration.workDays - countWorkDays(new Date(form.startDate), new Date(form.targetDate))) > 1 && (
+                    <span style={{ color: '#dc2626', fontWeight: 'bold' }}>
+                      ⚠️ Duration mismatch detected!
+                    </span>
+                  )}
+                </>
+              )}
             </div>
           </div>
         )}
