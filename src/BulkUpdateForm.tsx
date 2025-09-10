@@ -25,6 +25,70 @@ class PoolUtilizationCache {
 
 const poolUtilizationCache = new PoolUtilizationCache();
 
+// Standardized form styles
+const formStyles = {
+  input: {
+    padding: '0.5rem',
+    border: '1px solid #d1d5db',
+    borderRadius: '4px',
+    fontSize: '14px',
+    backgroundColor: 'white',
+    color: '#000',
+    width: '100%',
+    fontFamily: 'inherit'
+  },
+  inputShort: {
+    padding: '0.5rem',
+    border: '1px solid #d1d5db',
+    borderRadius: '4px',
+    fontSize: '14px',
+    backgroundColor: 'white',
+    color: '#000',
+    width: '120px',
+    fontFamily: 'inherit'
+  },
+  inputMedium: {
+    padding: '0.5rem',
+    border: '1px solid #d1d5db',
+    borderRadius: '4px',
+    fontSize: '14px',
+    backgroundColor: 'white',
+    color: '#000',
+    width: '200px',
+    fontFamily: 'inherit'
+  },
+  select: {
+    padding: '0.5rem',
+    border: '1px solid #d1d5db',
+    borderRadius: '4px',
+    fontSize: '14px',
+    backgroundColor: 'white',
+    color: '#000',
+    width: '100%',
+    fontFamily: 'inherit'
+  },
+  selectShort: {
+    padding: '0.5rem',
+    border: '1px solid #d1d5db',
+    borderRadius: '4px',
+    fontSize: '14px',
+    backgroundColor: 'white',
+    color: '#000',
+    width: '120px',
+    fontFamily: 'inherit'
+  },
+  selectMedium: {
+    padding: '0.5rem',
+    border: '1px solid #d1d5db',
+    borderRadius: '4px',
+    fontSize: '14px',
+    backgroundColor: 'white',
+    color: '#000',
+    width: '200px',
+    fontFamily: 'inherit'
+  }
+};
+
 interface BulkUpdateFormProps {
   projects: ProjectFormData[];
   pools: PoolData[];
@@ -284,14 +348,8 @@ const BulkUpdateForm: React.FC<BulkUpdateFormProps> = ({
               }
             }}
             style={{
-              padding: '0.5rem',
-              border: '1px solid #d1d5db',
-              borderRadius: '4px',
-              fontSize: '14px',
-              width: '100%',
-              maxWidth: '300px',
-              backgroundColor: 'white',
-              color: '#000'
+              ...formStyles.select,
+              maxWidth: '300px'
             }}
           >
             {weekStarts.map((weekStart, index) => {
@@ -324,12 +382,8 @@ const BulkUpdateForm: React.FC<BulkUpdateFormProps> = ({
           value={selectedPool} 
           onChange={(e) => setSelectedPool(e.target.value)}
           style={{
-            padding: '0.5rem',
-            border: '1px solid #d1d5db',
-            borderRadius: '4px',
-            fontSize: '14px',
-            minWidth: '200px',
-            color: '#000'
+            ...formStyles.select,
+            minWidth: '200px'
           }}
         >
           <option value="">Select a pool...</option>
@@ -486,12 +540,10 @@ Pool: ${cp.project.pool} (${poolWeeklyHours}h/week)`}
                           }}
                           disabled={!cp.isActive}
                           style={{
+                            ...formStyles.inputShort,
                             width: '60px',
-                            padding: '0.25rem',
-                            border: '1px solid #d1d5db',
-                            borderRadius: '4px',
                             textAlign: 'center',
-                            background: cp.isActive ? '#3b3b3b' : '#f3f4f6'
+                            background: cp.isActive ? 'white' : '#f3f4f6'
                           }}
                         />
                       </td>

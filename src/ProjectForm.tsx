@@ -22,6 +22,82 @@ const initialForm: ProjectFormData = {
   notes: '',
 };
 
+// Standardized form styles
+const formStyles = {
+  input: {
+    padding: '0.5rem',
+    border: '1px solid #d1d5db',
+    borderRadius: '4px',
+    fontSize: '14px',
+    backgroundColor: 'white',
+    color: '#000',
+    width: '100%',
+    fontFamily: 'inherit'
+  },
+  inputShort: {
+    padding: '0.5rem',
+    border: '1px solid #d1d5db',
+    borderRadius: '4px',
+    fontSize: '14px',
+    backgroundColor: 'white',
+    color: '#000',
+    width: '120px',
+    fontFamily: 'inherit'
+  },
+  inputMedium: {
+    padding: '0.5rem',
+    border: '1px solid #d1d5db',
+    borderRadius: '4px',
+    fontSize: '14px',
+    backgroundColor: 'white',
+    color: '#000',
+    width: '200px',
+    fontFamily: 'inherit'
+  },
+  select: {
+    padding: '0.5rem',
+    border: '1px solid #d1d5db',
+    borderRadius: '4px',
+    fontSize: '14px',
+    backgroundColor: 'white',
+    color: '#000',
+    width: '100%',
+    fontFamily: 'inherit'
+  },
+  selectShort: {
+    padding: '0.5rem',
+    border: '1px solid #d1d5db',
+    borderRadius: '4px',
+    fontSize: '14px',
+    backgroundColor: 'white',
+    color: '#000',
+    width: '120px',
+    fontFamily: 'inherit'
+  },
+  selectMedium: {
+    padding: '0.5rem',
+    border: '1px solid #d1d5db',
+    borderRadius: '4px',
+    fontSize: '14px',
+    backgroundColor: 'white',
+    color: '#000',
+    width: '200px',
+    fontFamily: 'inherit'
+  },
+  textarea: {
+    padding: '0.75rem',
+    border: '1px solid #d1d5db',
+    borderRadius: '4px',
+    fontSize: '14px',
+    backgroundColor: 'white',
+    color: '#000',
+    width: '100%',
+    fontFamily: 'inherit',
+    resize: 'vertical' as const,
+    minHeight: '80px'
+  }
+};
+
 const ProjectForm: React.FC<ProjectFormProps> = ({ initialData, onSave, onCancel, pools, projects }) => {
   const [form, setForm] = useState<ProjectFormData>(initialForm);
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
@@ -361,14 +437,14 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ initialData, onSave, onCancel
       {/* Project Name - Always first */}
       <label style={{ color: '#000' }}>
         Project Name*:
-        <input name="name" value={form.name} onChange={handleChange} required />
+        <input name="name" value={form.name} onChange={handleChange} required style={formStyles.input} />
         {errors.name && <span style={{ color: 'red' }}>{errors.name}</span>}
       </label>
 
       {/* Pool Selection - Affects available hours */}
       <label style={{ color: '#000' }}>
         Project Pool*:
-        <select name="pool" value={form.pool} onChange={handleChange} required style={{ color: '#000' }}>
+        <select name="pool" value={form.pool} onChange={handleChange} required style={formStyles.select}>
           <option value="">Select a pool...</option>
           {pools.map((pool) => (
             <option key={pool.name} value={pool.name}>
@@ -395,7 +471,7 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ initialData, onSave, onCancel
       {/* Estimated Dev Hours - Required for calculations */}
       <label style={{ color: '#000' }}>
         Estimated Dev Hours*:
-        <input type="number" name="estimatedHours" value={form.estimatedHours} onChange={handleChange} min={1} required />
+        <input type="number" name="estimatedHours" value={form.estimatedHours} onChange={handleChange} min={1} required style={formStyles.inputShort} />
         {errors.estimatedHours && <span style={{ color: 'red' }}>{errors.estimatedHours}</span>}
       </label>
 
@@ -409,7 +485,7 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ initialData, onSave, onCancel
           onChange={handleChange}
           min={0}
           max={100}
-          style={{ width: 80 }}
+          style={formStyles.inputShort}
           required
         />
         <small style={{ color: '#666', fontSize: '12px', marginLeft: '8px' }}>
@@ -559,7 +635,7 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ initialData, onSave, onCancel
                 </span>
               )}
             </div>
-            <input type="date" name="startDate" value={form.startDate} onChange={handleChange} style={{ width: '100%' }} />
+            <input type="date" name="startDate" value={form.startDate} onChange={handleChange} style={formStyles.inputMedium} />
             {errors.startDate && <span style={{ color: 'red' }}>{errors.startDate}</span>}
           </label>
           <label style={{ color: '#000', flex: '1', minWidth: '200px' }}>
@@ -615,7 +691,7 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ initialData, onSave, onCancel
                 </span>
               )}
             </div>
-            <input type="date" name="targetDate" value={form.targetDate} onChange={handleChange} style={{ width: '100%' }} />
+            <input type="date" name="targetDate" value={form.targetDate} onChange={handleChange} style={formStyles.inputMedium} />
             {errors.targetDate && <span style={{ color: 'red' }}>{errors.targetDate}</span>}
           </label>
         </div>
@@ -657,17 +733,17 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ initialData, onSave, onCancel
       {/* Other Project Details */}
       <label style={{ color: '#000' }}>
         Project Sponsor:
-        <input name="sponsor" value={form.sponsor} onChange={handleChange} />
+        <input name="sponsor" value={form.sponsor} onChange={handleChange} style={formStyles.input} />
       </label>
 
       <label style={{ color: '#000' }}>
         Current Progress (%):
-        <input type="number" name="progress" value={form.progress} onChange={handleChange} min={0} max={100} />
+        <input type="number" name="progress" value={form.progress} onChange={handleChange} min={0} max={100} style={formStyles.inputShort} />
       </label>
 
       <label style={{ color: '#000' }}>
         Project Status:
-        <select name="status" value={form.status} onChange={handleChange} style={{ color: '#000' }}>
+        <select name="status" value={form.status} onChange={handleChange} style={formStyles.selectMedium}>
           <option value="Not Started">Not Started</option>
           <option value="Planning">Planning</option>
           <option value="Development">Development</option>
@@ -696,15 +772,7 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ initialData, onSave, onCancel
             <select 
               value={selectedWeekForAllocation || ''} 
               onChange={(e) => setSelectedWeekForAllocation(e.target.value)}
-              style={{
-                padding: '0.5rem',
-                border: '1px solid #d1d5db',
-                borderRadius: '4px',
-                fontSize: '14px',
-                width: '100%',
-                backgroundColor: 'white',
-                color: '#000'
-              }}
+              style={formStyles.select}
             >
               <option value="">Select a week...</option>
               {getAvailableWeeks().map((week, index) => (
@@ -733,13 +801,7 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ initialData, onSave, onCancel
               min={0} 
               max={100} 
               step={1}
-              style={{
-                padding: '0.5rem',
-                border: '1px solid #d1d5db',
-                borderRadius: '4px',
-                fontSize: '14px',
-                width: '100%'
-              }}
+              style={formStyles.inputShort}
               placeholder="Enter %"
             />
           </div>
@@ -821,19 +883,7 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ initialData, onSave, onCancel
           onChange={handleChange} 
           rows={4} 
           placeholder="Enter project notes, requirements, or additional details..."
-          style={{ 
-            width: '100%', 
-            minHeight: '100px',
-            padding: '12px',
-            border: '2px solid #3b82f6',
-            borderRadius: '6px',
-            fontSize: '14px',
-            fontFamily: 'inherit',
-            resize: 'vertical',
-            lineHeight: '1.5',
-            backgroundColor: '#ffffff',
-            color: '#000000'
-          }} 
+          style={formStyles.textarea}
         />
       </label>
       <div style={{ display: 'flex', gap: '1rem', alignSelf: 'flex-start' }}>
