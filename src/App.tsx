@@ -11,6 +11,50 @@ import type { ProjectFormData, PoolData } from './types';
 
 type TabType = 'projects' | 'pools' | 'bulk-update' | 'export';
 
+// Helper functions for week calculations
+function getWeekStart(date: Date) {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() - d.getDay()); // Sunday as start of week
+  return d;
+}
+
+function getAllWeekStarts(min: Date, max: Date) {
+  const weeks = [];
+  const current = getWeekStart(min);
+  // Prepend one week before min
+  current.setDate(current.getDate() - 7);
+  while (current <= max) {
+    weeks.push(new Date(current));
+    current.setDate(current.getDate() + 7);
+  }
+  return weeks;
+}
+
+function getDateRange(projects: ProjectFormData[]) {
+  if (projects.length === 0) {
+    const today = new Date();
+    const future = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000); // 30 days from now
+    return { min: today, max: future };
+  }
+  
+  const dates = projects.flatMap(p => [
+    new Date(p.startDate),
+    new Date(p.targetDate)
+  ]).filter(d => !isNaN(d.getTime()));
+  
+  if (dates.length === 0) {
+    const today = new Date();
+    const future = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000);
+    return { min: today, max: future };
+  }
+  
+  return {
+    min: new Date(Math.min(...dates.map(d => d.getTime()))),
+    max: new Date(Math.max(...dates.map(d => d.getTime())))
+  };
+}
+
 // Sample default data for testing
 const defaultPools: PoolData[] = [
   {
@@ -108,6 +152,10 @@ function App() {
     },
     search: ''
   });
+
+  // Calculate weekStarts for the Gantt chart
+  const dateRange = getDateRange(projects);
+  const weekStarts = getAllWeekStarts(dateRange.min, dateRange.max);
 
   // Load data from localStorage on component mount
   useEffect(() => {
@@ -585,10 +633,12 @@ function App() {
                 pools={pools}
                 selectedWeekIndex={selectedWeekIndex}
                 selectedWeekStart={selectedWeekStart}
+                weekStarts={weekStarts}
                 onSave={handleBulkUpdateSave}
                 onCancel={handleBulkUpdateCancel}
                 onNewProject={handleBulkUpdateNewProject}
                 onEditProject={handleBulkUpdateEditProject}
+                onWeekSelect={handleWeekSelect}
               />
             )}
             {activeTab === 'export' && (

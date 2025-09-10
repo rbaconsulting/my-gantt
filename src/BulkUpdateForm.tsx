@@ -30,10 +30,12 @@ interface BulkUpdateFormProps {
   pools: PoolData[];
   selectedWeekIndex?: number | null;
   selectedWeekStart?: Date | null;
+  weekStarts?: Date[]; // Available weeks for selection
   onSave: (updatedProjects: ProjectFormData[]) => void;
   onCancel: () => void;
   onNewProject: () => void;
   onEditProject: (project: ProjectFormData) => void;
+  onWeekSelect?: (weekIndex: number, weekStart: Date) => void; // Callback to sync with Gantt
 }
 
 interface ConcurrentProject {
@@ -47,11 +49,14 @@ interface ConcurrentProject {
 const BulkUpdateForm: React.FC<BulkUpdateFormProps> = ({ 
   projects, 
   pools, 
+  selectedWeekIndex,
   selectedWeekStart, 
+  weekStarts = [],
   onSave, 
   onCancel, 
   onNewProject, 
-  onEditProject 
+  onEditProject,
+  onWeekSelect
 }) => {
   const [selectedPool, setSelectedPool] = useState<string>('');
   const [concurrentProjects, setConcurrentProjects] = useState<ConcurrentProject[]>([]);
@@ -263,6 +268,51 @@ const BulkUpdateForm: React.FC<BulkUpdateFormProps> = ({
           + New Project
         </button>
       </div>
+      
+      {/* Week Selection */}
+      {weekStarts.length > 0 && (
+        <div style={{ marginBottom: '1.5rem' }}>
+          <label style={{ display: 'block', fontSize: '14px', fontWeight: 'bold', marginBottom: '0.5rem', color: '#000' }}>
+            Select Week:
+          </label>
+          <select 
+            value={selectedWeekIndex ?? -1} 
+            onChange={(e) => {
+              const weekIndex = parseInt(e.target.value);
+              if (weekIndex >= 0 && weekIndex < weekStarts.length && onWeekSelect) {
+                onWeekSelect(weekIndex, weekStarts[weekIndex]);
+              }
+            }}
+            style={{
+              padding: '0.5rem',
+              border: '1px solid #d1d5db',
+              borderRadius: '4px',
+              fontSize: '14px',
+              width: '100%',
+              maxWidth: '300px',
+              backgroundColor: 'white'
+            }}
+          >
+            {weekStarts.map((weekStart, index) => {
+              const weekEnd = new Date(weekStart);
+              weekEnd.setDate(weekEnd.getDate() + 6);
+              return (
+                <option key={index} value={index}>
+                  Week of {weekStart.toLocaleDateString('en-US', { 
+                    month: 'short', 
+                    day: 'numeric',
+                    year: 'numeric'
+                  })} - {weekEnd.toLocaleDateString('en-US', { 
+                    month: 'short', 
+                    day: 'numeric',
+                    year: 'numeric'
+                  })}
+                </option>
+              );
+            })}
+          </select>
+        </div>
+      )}
       
       {/* Pool Selection */}
       <div style={{ marginBottom: '2rem' }}>

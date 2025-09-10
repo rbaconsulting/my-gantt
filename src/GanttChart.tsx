@@ -8,6 +8,7 @@ interface ProcessedProject {
   endDate: Date;
   isActive: boolean;
   weeklyAllocation: number;
+  weeklyAllocations?: { [weekStart: string]: number };
   estimatedHours: number;
   status?: string;
   name: string;
@@ -49,6 +50,7 @@ function preprocessProjects(projects: ProjectFormData[]): ProcessedProject[] {
     endDate: new Date(p.targetDate),
     isActive: !p.status?.toLowerCase().includes('complete'),
     weeklyAllocation: p.weeklyAllocation || 0,
+    weeklyAllocations: p.weeklyAllocations,
     estimatedHours: p.estimatedHours,
     status: p.status,
     name: p.name,
@@ -139,6 +141,19 @@ function getProjectColor(project: ProjectFormData) {
     return statusColors[project.status];
   }
   return '#9ca3af'; // Default gray for projects without status
+}
+
+// Helper function to get allocation for a specific week
+function getWeeklyAllocation(project: ProcessedProject | ProjectFormData, weekStart: Date): number {
+  const weekKey = weekStart.toISOString().split('T')[0];
+  
+  // If project has specific weekly allocations, use that for this week
+  if (project.weeklyAllocations && project.weeklyAllocations[weekKey] !== undefined) {
+    return project.weeklyAllocations[weekKey];
+  }
+  
+  // Otherwise, use the default weekly allocation
+  return project.weeklyAllocation || 0;
 }
 
 function getDateRange(projects: ProjectFormData[]) {
@@ -234,7 +249,7 @@ function calculatePoolUtilization(projects: ProjectFormData[], pools: PoolData[]
   
   const concurrentProjects = getCurrentWeekConcurrentProjects(projects, poolName, weekStart, weekEnd);
   const totalAllocated = concurrentProjects.reduce((sum, proj) => {
-    const allocationPercent = proj.status?.toLowerCase() === 'complete' ? 0 : (proj.weeklyAllocation || 0);
+    const allocationPercent = proj.status?.toLowerCase() === 'complete' ? 0 : getWeeklyAllocation(proj, weekStart);
     // Use pool's standard week hours instead of hardcoded 40
     const standardWeekHours = pool.standardWeekHours || 40;
     return sum + (allocationPercent / 100) * standardWeekHours;
@@ -262,9 +277,9 @@ function calculatePoolUtilization(projects: ProjectFormData[], pools: PoolData[]
   return result;
 }
 
-function calculatePoolUtilizationFromProjects(projects: ProcessedProject[], pool: PoolData) {
+function calculatePoolUtilizationFromProjects(projects: ProcessedProject[], pool: PoolData, weekStart: Date) {
   const totalAllocated = projects.reduce((sum, proj) => {
-    const allocationPercent = proj.status?.toLowerCase() === 'complete' ? 0 : (proj.weeklyAllocation || 0);
+    const allocationPercent = proj.status?.toLowerCase() === 'complete' ? 0 : getWeeklyAllocation(proj, weekStart);
     // Use pool's standard week hours instead of hardcoded 40
     const standardWeekHours = pool.standardWeekHours || 40;
     return sum + (allocationPercent / 100) * standardWeekHours;
@@ -312,7 +327,7 @@ function getFutureOverAllocationWarnings(projects: ProjectFormData[], pools: Poo
     // Calculate utilization for all pools in this week
     pools.forEach(pool => {
       const poolProjects = weekProjects.get(pool.name) || [];
-      const utilization = calculatePoolUtilizationFromProjects(poolProjects, pool);
+      const utilization = calculatePoolUtilizationFromProjects(poolProjects, pool, weekStart);
       
       if (utilization.isOverAllocated) {
         warnings[warningIndex++] = { 
@@ -910,12 +925,13 @@ const GanttChart: React.FC<GanttChartProps> = ({ projects, pools, filters, onWee
             // Tooltip calculations
             const pool = pools.find(p => p.name === proj.pool);
             const poolWeeklyHours = pool?.weeklyHours || 40;
-            const allocationPercent = proj.status?.toLowerCase() === 'complete' ? 0 : (proj.weeklyAllocation || 0);
-            const allocationHours = Math.round((allocationPercent / 100) * (pool?.standardWeekHours || 40) * 10) / 10;
-            const estHoursLeft = Math.round((proj.estimatedHours * (1 - (proj.progress || 0) / 100)) * 10) / 10;
             
             // Find current week
             const currentWeekStart = weekStarts[currentWeekIdx >= 0 ? currentWeekIdx : 0];
+            const allocationPercent = proj.status?.toLowerCase() === 'complete' ? 0 : getWeeklyAllocation(proj, currentWeekStart);
+            const allocationHours = Math.round((allocationPercent / 100) * (pool?.standardWeekHours || 40) * 10) / 10;
+            const estHoursLeft = Math.round((proj.estimatedHours * (1 - (proj.progress || 0) / 100)) * 10) / 10;
+            
             const currentWeekEnd = new Date(currentWeekStart.getTime() + 6 * 24 * 60 * 60 * 1000);
             const concurrent = getCurrentWeekConcurrentProjects(projects, proj.pool, currentWeekStart, currentWeekEnd);
             const concurrentCount = concurrent.length || 1;

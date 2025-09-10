@@ -25,6 +25,8 @@ const initialForm: ProjectFormData = {
 const ProjectForm: React.FC<ProjectFormProps> = ({ initialData, onSave, onCancel, pools, projects }) => {
   const [form, setForm] = useState<ProjectFormData>(initialForm);
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
+  const [selectedWeekForAllocation, setSelectedWeekForAllocation] = useState<string>('');
+  const [weeklyAllocationInput, setWeeklyAllocationInput] = useState<string>('');
 
   const selectedPool = useMemo(() => pools.find(p => p.name === form.pool), [pools, form.pool]);
 
@@ -241,6 +243,65 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ initialData, onSave, onCancel
     }
     
     return workDays;
+  };
+
+  // Helper function to get available weeks for allocation
+  const getAvailableWeeks = () => {
+    if (!form.startDate || !form.targetDate) return [];
+    
+    const startDate = new Date(form.startDate);
+    const endDate = new Date(form.targetDate);
+    const weeks = [];
+    
+    // Get week start (Sunday)
+    const getWeekStart = (date: Date) => {
+      const d = new Date(date);
+      d.setHours(0, 0, 0, 0);
+      d.setDate(d.getDate() - d.getDay());
+      return d;
+    };
+    
+    const current = getWeekStart(startDate);
+    while (current <= endDate) {
+      const weekEnd = new Date(current);
+      weekEnd.setDate(weekEnd.getDate() + 6);
+      weeks.push({ start: new Date(current), end: weekEnd });
+      current.setDate(current.getDate() + 7);
+    }
+    
+    return weeks;
+  };
+
+  // Handle adding a weekly allocation
+  const handleAddWeeklyAllocation = () => {
+    if (!selectedWeekForAllocation || !weeklyAllocationInput) return;
+    
+    const allocation = parseFloat(weeklyAllocationInput);
+    if (isNaN(allocation) || allocation < 0 || allocation > 100) return;
+    
+    setForm(prev => ({
+      ...prev,
+      weeklyAllocations: {
+        ...prev.weeklyAllocations,
+        [selectedWeekForAllocation]: allocation
+      }
+    }));
+    
+    // Clear inputs
+    setSelectedWeekForAllocation('');
+    setWeeklyAllocationInput('');
+  };
+
+  // Handle removing a weekly allocation
+  const handleRemoveWeeklyAllocation = (weekStart: string) => {
+    setForm(prev => {
+      const newAllocations = { ...prev.weeklyAllocations };
+      delete newAllocations[weekStart];
+      return {
+        ...prev,
+        weeklyAllocations: newAllocations
+      };
+    });
   };
 
   const validate = () => {
@@ -616,6 +677,140 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ initialData, onSave, onCancel
           <option value="On Hold">On Hold</option>
         </select>
       </label>
+
+      {/* Weekly Allocations Section */}
+      <div style={{ marginTop: '1rem', padding: '1rem', backgroundColor: '#f8f9fa', borderRadius: '6px', border: '1px solid #e9ecef' }}>
+        <h4 style={{ margin: '0 0 1rem 0', color: '#000', fontSize: '16px' }}>
+          Weekly Allocations (Optional)
+        </h4>
+        <div style={{ fontSize: '13px', color: '#666', marginBottom: '1rem' }}>
+          Set specific allocation percentages for individual weeks. If not set, the default weekly allocation above will be used.
+        </div>
+        
+        {/* Week selector and allocation input */}
+        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginBottom: '1rem' }}>
+          <div style={{ flex: 1 }}>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '0.25rem', color: '#000' }}>
+              Week:
+            </label>
+            <select 
+              value={selectedWeekForAllocation || ''} 
+              onChange={(e) => setSelectedWeekForAllocation(e.target.value)}
+              style={{
+                padding: '0.5rem',
+                border: '1px solid #d1d5db',
+                borderRadius: '4px',
+                fontSize: '14px',
+                width: '100%',
+                backgroundColor: 'white'
+              }}
+            >
+              <option value="">Select a week...</option>
+              {getAvailableWeeks().map((week, index) => (
+                <option key={index} value={week.start.toISOString().split('T')[0]}>
+                  Week of {week.start.toLocaleDateString('en-US', { 
+                    month: 'short', 
+                    day: 'numeric',
+                    year: 'numeric'
+                  })} - {week.end.toLocaleDateString('en-US', { 
+                    month: 'short', 
+                    day: 'numeric',
+                    year: 'numeric'
+                  })}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div style={{ flex: 1 }}>
+            <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '0.25rem', color: '#000' }}>
+              Allocation (%):
+            </label>
+            <input 
+              type="number" 
+              value={weeklyAllocationInput || ''} 
+              onChange={(e) => setWeeklyAllocationInput(e.target.value)}
+              min={0} 
+              max={100} 
+              step={1}
+              style={{
+                padding: '0.5rem',
+                border: '1px solid #d1d5db',
+                borderRadius: '4px',
+                fontSize: '14px',
+                width: '100%'
+              }}
+              placeholder="Enter %"
+            />
+          </div>
+          <button 
+            type="button"
+            onClick={handleAddWeeklyAllocation}
+            disabled={!selectedWeekForAllocation || !weeklyAllocationInput}
+            style={{
+              padding: '0.5rem 1rem',
+              fontSize: '14px',
+              borderRadius: '4px',
+              border: '1px solid #3b82f6',
+              background: '#3b82f6',
+              color: 'white',
+              cursor: 'pointer',
+              opacity: (!selectedWeekForAllocation || !weeklyAllocationInput) ? 0.5 : 1
+            }}
+          >
+            Add
+          </button>
+        </div>
+        
+        {/* Display current weekly allocations */}
+        {form.weeklyAllocations && Object.keys(form.weeklyAllocations).length > 0 && (
+          <div>
+            <div style={{ fontSize: '12px', fontWeight: 'bold', marginBottom: '0.5rem', color: '#000' }}>
+              Current Weekly Allocations:
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+              {Object.entries(form.weeklyAllocations).map(([weekStart, allocation]) => {
+                const weekDate = new Date(weekStart);
+                const weekEnd = new Date(weekDate);
+                weekEnd.setDate(weekEnd.getDate() + 6);
+                return (
+                  <div 
+                    key={weekStart}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.5rem',
+                      padding: '0.25rem 0.5rem',
+                      backgroundColor: '#e0f2fe',
+                      borderRadius: '4px',
+                      border: '1px solid #bae6fd',
+                      fontSize: '12px'
+                    }}
+                  >
+                    <span style={{ color: '#000' }}>
+                      {weekDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - {weekEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}: {allocation}%
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveWeeklyAllocation(weekStart)}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: '#dc2626',
+                        cursor: 'pointer',
+                        fontSize: '14px',
+                        padding: '0'
+                      }}
+                      title="Remove this allocation"
+                    >
+                      ×
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
 
       <label style={{ color: '#000' }}>
         Notes:

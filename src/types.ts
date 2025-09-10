@@ -18,7 +18,8 @@ export interface ProjectFormData {
   estimatedHours: number;
   progress: number;
   status?: string;
-  weeklyAllocation?: number; // percent of 40-hour week
+  weeklyAllocation?: number; // percent of 40-hour week (default allocation)
+  weeklyAllocations?: { [weekStart: string]: number }; // Specific allocation per week
   notes?: string;
   autoRecalculated?: boolean; // Flag to indicate if target date was auto-calculated
   lastModified?: string; // ISO timestamp
