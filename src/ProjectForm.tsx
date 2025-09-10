@@ -54,6 +54,22 @@ const formStyles = {
     width: '200px',
     fontFamily: 'inherit'
   },
+  inputDate: {
+    padding: '0.5rem',
+    border: '1px solid #d1d5db',
+    borderRadius: '4px',
+    fontSize: '14px',
+    backgroundColor: 'white',
+    color: '#000',
+    width: '200px',
+    fontFamily: 'inherit',
+    // Improve date picker icon visibility
+    backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%23374151'%3e%3cpath fill-rule='evenodd' d='M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z' clip-rule='evenodd'/%3e%3c/svg%3e")`,
+    backgroundRepeat: 'no-repeat',
+    backgroundPosition: 'right 0.5rem center',
+    backgroundSize: '1rem 1rem',
+    paddingRight: '2.5rem'
+  },
   select: {
     padding: '0.5rem',
     border: '1px solid #d1d5db',
@@ -635,7 +651,7 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ initialData, onSave, onCancel
                 </span>
               )}
             </div>
-            <input type="date" name="startDate" value={form.startDate} onChange={handleChange} style={formStyles.inputMedium} />
+            <input type="date" name="startDate" value={form.startDate} onChange={handleChange} style={formStyles.inputDate} />
             {errors.startDate && <span style={{ color: 'red' }}>{errors.startDate}</span>}
           </label>
           <label style={{ color: '#000', flex: '1', minWidth: '200px' }}>
@@ -691,7 +707,7 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ initialData, onSave, onCancel
                 </span>
               )}
             </div>
-            <input type="date" name="targetDate" value={form.targetDate} onChange={handleChange} style={formStyles.inputMedium} />
+            <input type="date" name="targetDate" value={form.targetDate} onChange={handleChange} style={formStyles.inputDate} />
             {errors.targetDate && <span style={{ color: 'red' }}>{errors.targetDate}</span>}
           </label>
         </div>

@@ -264,9 +264,41 @@ const BulkUpdateForm: React.FC<BulkUpdateFormProps> = ({
     const updatedProjects = projects.map(project => {
       const concurrent = concurrentProjects.find(cp => cp.project.name === project.name);
       if (concurrent) {
+        // Get the current week start date
+        const getCurrentWeekStart = () => {
+          if (selectedWeekStart) {
+            return new Date(selectedWeekStart);
+          }
+          const now = new Date();
+          const startOfWeek = new Date(now);
+          startOfWeek.setDate(now.getDate() - now.getDay());
+          startOfWeek.setHours(0, 0, 0, 0);
+          return startOfWeek;
+        };
+        
+        const currentWeekStart = getCurrentWeekStart();
+        
+        // Create or update weeklyAllocations
+        const existingWeeklyAllocations = project.weeklyAllocations || {};
+        const newWeeklyAllocations = { ...existingWeeklyAllocations };
+        
+        // Set the allocation for the current week and all subsequent weeks
+        // Find all weeks from current week to project end date
+        const projectEndDate = new Date(project.targetDate);
+        let weekStart = new Date(currentWeekStart);
+        
+        while (weekStart <= projectEndDate) {
+          const weekKey = weekStart.toISOString().split('T')[0];
+          newWeeklyAllocations[weekKey] = concurrent.newAllocation;
+          
+          // Move to next week
+          weekStart.setDate(weekStart.getDate() + 7);
+        }
+        
         return {
           ...project,
-          weeklyAllocation: concurrent.newAllocation
+          weeklyAllocation: concurrent.newAllocation, // Update default allocation
+          weeklyAllocations: newWeeklyAllocations // Update weekly-specific allocations
         };
       }
       return project;
@@ -349,7 +381,7 @@ const BulkUpdateForm: React.FC<BulkUpdateFormProps> = ({
             }}
             style={{
               ...formStyles.select,
-              maxWidth: '300px'
+              maxWidth: '400px'
             }}
           >
             {weekStarts.map((weekStart, index) => {
