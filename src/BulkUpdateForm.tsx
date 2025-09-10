@@ -125,6 +125,15 @@ const BulkUpdateForm: React.FC<BulkUpdateFormProps> = ({
   const [selectedPool, setSelectedPool] = useState<string>('');
   const [concurrentProjects, setConcurrentProjects] = useState<ConcurrentProject[]>([]);
 
+  // Helper function to get the correct allocation for a specific week
+  const getWeeklyAllocation = (project: ProjectFormData, weekStart: Date): number => {
+    const weekKey = weekStart.toISOString().split('T')[0];
+    if (project.weeklyAllocations && project.weeklyAllocations[weekKey] !== undefined) {
+      return project.weeklyAllocations[weekKey];
+    }
+    return project.weeklyAllocation || 0;
+  };
+
   // Pre-process projects for better performance
   const processedProjects = useMemo(() => {
     return projects.map(project => ({
@@ -176,13 +185,17 @@ const BulkUpdateForm: React.FC<BulkUpdateFormProps> = ({
       
       const pool = pools.find(p => p.name === selectedPool);
       
-      const concurrent: ConcurrentProject[] = activeProjects.map(project => ({
-        project: projects.find(p => p.name === project.name)!,
-        currentAllocation: project.weeklyAllocation,
-        newAllocation: project.weeklyAllocation,
-        pool: pool!,
-        isActive: project.weeklyAllocation > 0 // Only active if they have allocation
-      }));
+      const concurrent: ConcurrentProject[] = activeProjects.map(project => {
+        const fullProject = projects.find(p => p.name === project.name)!;
+        const currentWeekAllocation = getWeeklyAllocation(fullProject, startOfWeek);
+        return {
+          project: fullProject,
+          currentAllocation: currentWeekAllocation,
+          newAllocation: currentWeekAllocation,
+          pool: pool!,
+          isActive: currentWeekAllocation > 0 // Only active if they have allocation
+        };
+      });
 
       setConcurrentProjects(concurrent);
     } else {

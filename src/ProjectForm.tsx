@@ -120,6 +120,15 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ initialData, onSave, onCancel
   const [selectedWeekForAllocation, setSelectedWeekForAllocation] = useState<string>('');
   const [weeklyAllocationInput, setWeeklyAllocationInput] = useState<string>('');
 
+  // Helper function to get the correct allocation for a specific week
+  const getWeeklyAllocation = (project: ProjectFormData, weekStart: Date): number => {
+    const weekKey = weekStart.toISOString().split('T')[0];
+    if (project.weeklyAllocations && project.weeklyAllocations[weekKey] !== undefined) {
+      return project.weeklyAllocations[weekKey];
+    }
+    return project.weeklyAllocation || 0;
+  };
+
   const selectedPool = useMemo(() => pools.find(p => p.name === form.pool), [pools, form.pool]);
 
   // Calculate over-allocation warnings
@@ -365,6 +374,17 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ initialData, onSave, onCancel
   };
 
   // Handle adding a weekly allocation
+  // Pre-populate weekly allocation input when week is selected
+  useEffect(() => {
+    if (selectedWeekForAllocation) {
+      // Get the current allocation for the selected week
+      const currentAllocation = getWeeklyAllocation(form, new Date(selectedWeekForAllocation));
+      setWeeklyAllocationInput(currentAllocation.toString());
+    } else {
+      setWeeklyAllocationInput('');
+    }
+  }, [selectedWeekForAllocation, form.weeklyAllocation, form.weeklyAllocations]);
+
   const handleAddWeeklyAllocation = () => {
     if (!selectedWeekForAllocation || !weeklyAllocationInput) return;
     
