@@ -33,7 +33,9 @@ const formStyles = {
     color: '#000',
     width: '100%',
     fontFamily: 'inherit',
-    textAlign: 'left' as const
+    textAlign: 'left' as const,
+    marginLeft: '0',
+    marginRight: '0'
   },
   inputShort: {
     padding: '0.5rem',
@@ -44,7 +46,9 @@ const formStyles = {
     color: '#000',
     width: '120px',
     fontFamily: 'inherit',
-    textAlign: 'left' as const
+    textAlign: 'left' as const,
+    marginLeft: '0',
+    marginRight: '0'
   },
   inputMedium: {
     padding: '0.5rem',
@@ -83,7 +87,9 @@ const formStyles = {
     color: '#000',
     width: '100%',
     fontFamily: 'inherit',
-    textAlign: 'left' as const
+    textAlign: 'left' as const,
+    marginLeft: '0',
+    marginRight: '0'
   },
   selectShort: {
     padding: '0.5rem',
@@ -124,7 +130,10 @@ const formStyles = {
     fontWeight: '600',
     color: '#374151',
     marginBottom: '0.5rem',
-    textAlign: 'left' as const
+    textAlign: 'left' as const,
+    width: '100%',
+    clear: 'both' as const,
+    float: 'none' as const
   }
 };
 
@@ -485,16 +494,16 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ initialData, onSave, onCancel
       <h2 style={{ alignSelf: 'flex-start', color: '#000' }}>{initialData ? 'Edit Project' : 'Add New Project'}</h2>
       
       {/* Project Name and Pool - Side by side */}
-      <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem' }}>
+      <div style={{ display: 'flex', gap: '5rem', marginBottom: '1rem' }}>
         <div style={{ flex: '1' }}>
-          <label style={formStyles.label}>
+          <label style={{ ...formStyles.label, display: 'block', marginBottom: '0.5rem' }}>
             Project Name*
           </label>
           <input name="name" value={form.name} onChange={handleChange} required style={formStyles.input} />
           {errors.name && <span style={{ color: 'red', fontSize: '12px', marginTop: '0.25rem', display: 'block' }}>{errors.name}</span>}
         </div>
         <div style={{ flex: '1' }}>
-          <label style={formStyles.label}>
+          <label style={{ ...formStyles.label, display: 'block', marginBottom: '0.5rem' }}>
             Project Pool*
           </label>
           <select name="pool" value={form.pool} onChange={handleChange} required style={formStyles.select}>
@@ -532,17 +541,28 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ initialData, onSave, onCancel
       )}
 
       {/* Estimated Dev Hours and Weekly Allocation - Side by side */}
-      <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem' }}>
+      <div style={{ display: 'flex', gap: '5rem', marginBottom: '1rem' }}>
         <div style={{ flex: '1' }}>
-          <label style={formStyles.label}>
+          <label style={{ ...formStyles.label, display: 'block', marginBottom: '0.5rem' }}>
             Estimated Dev Hours*
           </label>
           <input type="number" name="estimatedHours" value={form.estimatedHours} onChange={handleChange} min={1} required style={formStyles.inputShort} />
           {errors.estimatedHours && <span style={{ color: 'red', fontSize: '12px', marginTop: '0.25rem', display: 'block' }}>{errors.estimatedHours}</span>}
         </div>
         <div style={{ flex: '1' }}>
-          <label style={formStyles.label}>
-            Weekly Allocation (% of {selectedPool?.standardWeekHours || 40}h week)*
+          <label style={{ ...formStyles.label, display: 'block', marginBottom: '0.5rem' }}>
+            Weekly Allocation %*
+            <span 
+              style={{ 
+                marginLeft: '4px', 
+                cursor: 'help',
+                color: '#6b7280',
+                fontSize: '12px'
+              }} 
+              title={`% of ${selectedPool?.standardWeekHours || 40}h week`}
+            >
+              ℹ️
+            </span>
           </label>
           <input
             type="number"
@@ -843,8 +863,8 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ initialData, onSave, onCancel
         {/* Week selector and allocation input */}
         <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginBottom: '1rem' }}>
           <div style={{ flex: 1 }}>
-            <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '0.25rem', color: '#000' }}>
-              Week:
+            <label style={formStyles.label}>
+              Week
             </label>
             <select 
               value={selectedWeekForAllocation || ''} 
@@ -868,8 +888,8 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ initialData, onSave, onCancel
             </select>
           </div>
           <div style={{ flex: 1 }}>
-            <label style={{ display: 'block', fontSize: '12px', fontWeight: 'bold', marginBottom: '0.25rem', color: '#000' }}>
-              Allocation (%):
+            <label style={formStyles.label}>
+              Allocation (%)
             </label>
             <input 
               type="number" 

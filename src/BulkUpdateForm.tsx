@@ -96,7 +96,10 @@ const formStyles = {
     fontWeight: '600',
     color: '#374151',
     marginBottom: '0.5rem',
-    textAlign: 'left' as const
+    textAlign: 'left' as const,
+    width: '100%',
+    clear: 'both' as const,
+    float: 'none' as const
   }
 };
 
