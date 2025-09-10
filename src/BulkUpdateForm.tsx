@@ -35,7 +35,8 @@ const formStyles = {
     backgroundColor: 'white',
     color: '#000',
     width: '100%',
-    fontFamily: 'inherit'
+    fontFamily: 'inherit',
+    textAlign: 'left' as const
   },
   inputShort: {
     padding: '0.5rem',
@@ -45,7 +46,8 @@ const formStyles = {
     backgroundColor: 'white',
     color: '#000',
     width: '120px',
-    fontFamily: 'inherit'
+    fontFamily: 'inherit',
+    textAlign: 'left' as const
   },
   inputMedium: {
     padding: '0.5rem',
@@ -65,7 +67,8 @@ const formStyles = {
     backgroundColor: 'white',
     color: '#000',
     width: '100%',
-    fontFamily: 'inherit'
+    fontFamily: 'inherit',
+    textAlign: 'left' as const
   },
   selectShort: {
     padding: '0.5rem',
@@ -86,6 +89,14 @@ const formStyles = {
     color: '#000',
     width: '200px',
     fontFamily: 'inherit'
+  },
+  label: {
+    display: 'block',
+    fontSize: '14px',
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: '0.5rem',
+    textAlign: 'left' as const
   }
 };
 
@@ -381,8 +392,8 @@ const BulkUpdateForm: React.FC<BulkUpdateFormProps> = ({
       {/* Week Selection */}
       {weekStarts.length > 0 && (
         <div style={{ marginBottom: '1.5rem' }}>
-          <label style={{ display: 'block', fontSize: '14px', fontWeight: 'bold', marginBottom: '0.5rem', color: '#000' }}>
-            Select Week:
+          <label style={formStyles.label}>
+            Select Week
           </label>
           <select 
             value={selectedWeekIndex ?? -1} 
@@ -420,8 +431,8 @@ const BulkUpdateForm: React.FC<BulkUpdateFormProps> = ({
       
       {/* Pool Selection */}
       <div style={{ marginBottom: '2rem' }}>
-        <label style={{ display: 'block', fontSize: '14px', fontWeight: 'bold', marginBottom: '0.5rem', color: '#000' }}>
-          Select Pool:
+        <label style={formStyles.label}>
+          Select Pool
         </label>
         <select 
           value={selectedPool} 

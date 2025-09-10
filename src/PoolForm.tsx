@@ -26,7 +26,8 @@ const formStyles = {
     backgroundColor: 'white',
     color: '#000',
     width: '100%',
-    fontFamily: 'inherit'
+    fontFamily: 'inherit',
+    textAlign: 'left' as const
   },
   inputShort: {
     padding: '0.5rem',
@@ -36,7 +37,8 @@ const formStyles = {
     backgroundColor: 'white',
     color: '#000',
     width: '120px',
-    fontFamily: 'inherit'
+    fontFamily: 'inherit',
+    textAlign: 'left' as const
   },
   inputMedium: {
     padding: '0.5rem',
@@ -58,7 +60,16 @@ const formStyles = {
     width: '100%',
     fontFamily: 'inherit',
     resize: 'vertical' as const,
-    minHeight: '80px'
+    minHeight: '80px',
+    textAlign: 'left' as const
+  },
+  label: {
+    display: 'block',
+    fontSize: '14px',
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: '0.5rem',
+    textAlign: 'left' as const
   }
 };
 
@@ -120,21 +131,27 @@ const PoolForm: React.FC<PoolFormProps> = ({ initialData, onSave }) => {
       border: '1px solid #e9ecef'
     }}>
       <h2 style={{ alignSelf: 'flex-start', color: '#000' }}>{initialData ? 'Edit Pool' : 'Add New Pool'}</h2>
-      <label style={{ color: '#000' }}>
-        Pool Name*:
+      <div>
+        <label style={formStyles.label}>
+          Pool Name*
+        </label>
         <input name="name" value={form.name} onChange={handleChange} required style={formStyles.input} />
-        {errors.name && <span style={{ color: 'red' }}>{errors.name}</span>}
-      </label>
+        {errors.name && <span style={{ color: 'red', fontSize: '12px', marginTop: '0.25rem', display: 'block' }}>{errors.name}</span>}
+      </div>
       {/* Weekly Hours */}
-      <label style={{ color: '#000' }}>
-        Weekly Hours*:
+      <div>
+        <label style={formStyles.label}>
+          Weekly Hours*
+        </label>
         <input type="number" name="weeklyHours" value={form.weeklyHours} onChange={handleChange} min={1} max={168} required style={formStyles.inputShort} />
-        {errors.weeklyHours && <span style={{ color: 'red' }}>{errors.weeklyHours}</span>}
-      </label>
+        {errors.weeklyHours && <span style={{ color: 'red', fontSize: '12px', marginTop: '0.25rem', display: 'block' }}>{errors.weeklyHours}</span>}
+      </div>
 
       {/* Standard Week Hours */}
-      <label style={{ color: '#000' }}>
-        Standard Week Hours:
+      <div>
+        <label style={formStyles.label}>
+          Standard Week Hours
+        </label>
         <input 
           type="number" 
           name="standardWeekHours" 
@@ -145,32 +162,40 @@ const PoolForm: React.FC<PoolFormProps> = ({ initialData, onSave }) => {
           placeholder="40"
           style={formStyles.inputShort}
         />
-        <small style={{ color: '#666', fontSize: '12px', marginLeft: '8px' }}>
+        <small style={{ color: '#666', fontSize: '12px', marginTop: '0.25rem', display: 'block' }}>
           Hours per week for allocation calculations (default: 40)
         </small>
-        {errors.standardWeekHours && <span style={{ color: 'red' }}>{errors.standardWeekHours}</span>}
-      </label>
+        {errors.standardWeekHours && <span style={{ color: 'red', fontSize: '12px', marginTop: '0.25rem', display: 'block' }}>{errors.standardWeekHours}</span>}
+      </div>
 
       {/* Support Hours */}
-      <label style={{ color: '#000' }}>
-        Support Hours:
+      <div>
+        <label style={formStyles.label}>
+          Support Hours
+        </label>
         <input type="number" name="supportHours" value={form.supportHours} onChange={handleChange} min={0} style={formStyles.inputShort} />
-        {errors.supportHours && <span style={{ color: 'red' }}>{errors.supportHours}</span>}
-      </label>
-      <label style={{ color: '#000' }}>
-        Meeting Hours (Reserved):
+        {errors.supportHours && <span style={{ color: 'red', fontSize: '12px', marginTop: '0.25rem', display: 'block' }}>{errors.supportHours}</span>}
+      </div>
+      <div>
+        <label style={formStyles.label}>
+          Meeting Hours (Reserved)
+        </label>
         <input type="number" name="meetingHours" value={form.meetingHours} onChange={handleChange} min={0} style={formStyles.inputShort} />
-        <small style={{ color: '#666', fontSize: '12px' }}>Hours reserved for weekly meetings</small>
-        {errors.meetingHours && <span style={{ color: 'red' }}>{errors.meetingHours}</span>}
-      </label>
-      <label style={{ color: '#000' }}>
-        Description:
+        <small style={{ color: '#666', fontSize: '12px', marginTop: '0.25rem', display: 'block' }}>Hours reserved for weekly meetings</small>
+        {errors.meetingHours && <span style={{ color: 'red', fontSize: '12px', marginTop: '0.25rem', display: 'block' }}>{errors.meetingHours}</span>}
+      </div>
+      <div>
+        <label style={formStyles.label}>
+          Description
+        </label>
         <textarea name="description" value={form.description} onChange={handleChange} rows={3} style={formStyles.textarea} />
-      </label>
-      <label style={{ color: '#000' }}>
-        Color:
+      </div>
+      <div>
+        <label style={formStyles.label}>
+          Color
+        </label>
         <input type="color" name="color" value={form.color} onChange={handleChange} style={{ width: 40, height: 28, padding: 0, border: 'none', background: 'none' }} />
-      </label>
+      </div>
       <button type="submit">{initialData ? 'Update Pool' : 'Save Pool'}</button>
     </form>
   );

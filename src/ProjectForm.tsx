@@ -32,7 +32,8 @@ const formStyles = {
     backgroundColor: 'white',
     color: '#000',
     width: '100%',
-    fontFamily: 'inherit'
+    fontFamily: 'inherit',
+    textAlign: 'left' as const
   },
   inputShort: {
     padding: '0.5rem',
@@ -42,7 +43,8 @@ const formStyles = {
     backgroundColor: 'white',
     color: '#000',
     width: '120px',
-    fontFamily: 'inherit'
+    fontFamily: 'inherit',
+    textAlign: 'left' as const
   },
   inputMedium: {
     padding: '0.5rem',
@@ -52,7 +54,8 @@ const formStyles = {
     backgroundColor: 'white',
     color: '#000',
     width: '200px',
-    fontFamily: 'inherit'
+    fontFamily: 'inherit',
+    textAlign: 'left' as const
   },
   inputDate: {
     padding: '0.5rem',
@@ -63,6 +66,7 @@ const formStyles = {
     color: '#000',
     width: '200px',
     fontFamily: 'inherit',
+    textAlign: 'left' as const,
     // Improve date picker icon visibility
     backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%23374151'%3e%3cpath fill-rule='evenodd' d='M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z' clip-rule='evenodd'/%3e%3c/svg%3e")`,
     backgroundRepeat: 'no-repeat',
@@ -78,7 +82,8 @@ const formStyles = {
     backgroundColor: 'white',
     color: '#000',
     width: '100%',
-    fontFamily: 'inherit'
+    fontFamily: 'inherit',
+    textAlign: 'left' as const
   },
   selectShort: {
     padding: '0.5rem',
@@ -110,7 +115,16 @@ const formStyles = {
     width: '100%',
     fontFamily: 'inherit',
     resize: 'vertical' as const,
-    minHeight: '80px'
+    minHeight: '80px',
+    textAlign: 'left' as const
+  },
+  label: {
+    display: 'block',
+    fontSize: '14px',
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: '0.5rem',
+    textAlign: 'left' as const
   }
 };
 
@@ -470,65 +484,82 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ initialData, onSave, onCancel
     }}>
       <h2 style={{ alignSelf: 'flex-start', color: '#000' }}>{initialData ? 'Edit Project' : 'Add New Project'}</h2>
       
-      {/* Project Name - Always first */}
-      <label style={{ color: '#000' }}>
-        Project Name*:
-        <input name="name" value={form.name} onChange={handleChange} required style={formStyles.input} />
-        {errors.name && <span style={{ color: 'red' }}>{errors.name}</span>}
-      </label>
+      {/* Project Name and Pool - Side by side */}
+      <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem' }}>
+        <div style={{ flex: '1' }}>
+          <label style={formStyles.label}>
+            Project Name*
+          </label>
+          <input name="name" value={form.name} onChange={handleChange} required style={formStyles.input} />
+          {errors.name && <span style={{ color: 'red', fontSize: '12px', marginTop: '0.25rem', display: 'block' }}>{errors.name}</span>}
+        </div>
+        <div style={{ flex: '1' }}>
+          <label style={formStyles.label}>
+            Project Pool*
+          </label>
+          <select name="pool" value={form.pool} onChange={handleChange} required style={formStyles.select}>
+            <option value="">Select a pool...</option>
+            {pools.map((pool) => (
+              <option key={pool.name} value={pool.name}>
+                {pool.name} ({pool.weeklyHours} hrs/week)
+              </option>
+            ))}
+          </select>
+          {errors.pool && <span style={{ color: 'red', fontSize: '12px', marginTop: '0.25rem', display: 'block' }}>{errors.pool}</span>}
+        </div>
+      </div>
 
-      {/* Pool Selection - Affects available hours */}
-      <label style={{ color: '#000' }}>
-        Project Pool*:
-        <select name="pool" value={form.pool} onChange={handleChange} required style={formStyles.select}>
-          <option value="">Select a pool...</option>
-          {pools.map((pool) => (
-            <option key={pool.name} value={pool.name}>
-              {pool.name} ({pool.weeklyHours} hrs/week)
-            </option>
-          ))}
-        </select>
-        {errors.pool && <span style={{ color: 'red' }}>{errors.pool}</span>}
-      </label>
-
-      {/* Pool Information Display */}
+      {/* Pool Information Display - Banner spanning both columns */}
       {selectedPool && (
-        <div style={{ padding: '8px', backgroundColor: '#f0f9ff', borderRadius: '4px', fontSize: '14px', border: '1px solid #bae6fd' }}>
-          <div style={{ fontWeight: 'bold', color: 'black' }}>Pool: {selectedPool.name} - {selectedPool.weeklyHours} hours/week</div>
-          <div style={{ marginTop: '4px', color: '#666' }}>
+        <div style={{ 
+          padding: '12px', 
+          backgroundColor: '#f0f9ff', 
+          borderRadius: '6px', 
+          fontSize: '14px', 
+          border: '1px solid #bae6fd',
+          marginBottom: '1rem'
+        }}>
+          <div style={{ fontWeight: 'bold', color: 'black', marginBottom: '4px' }}>
+            Pool: {selectedPool.name} - {selectedPool.weeklyHours} hours/week
+          </div>
+          <div style={{ color: '#666', fontSize: '13px' }}>
             Standard Week: {selectedPool.standardWeekHours || 40} hours | Available: {selectedPool.weeklyHours - (selectedPool.supportHours || 0) - (selectedPool.meetingHours || 0)} hours/week
             {selectedPool.supportHours > 0 && <span style={{ marginLeft: '8px', color: '#dc2626' }}>(Support: {selectedPool.supportHours}h)</span>}
             {selectedPool.meetingHours > 0 && <span style={{ marginLeft: '8px', color: '#f59e0b' }}>(Meetings: {selectedPool.meetingHours}h)</span>}
           </div>
-          {selectedPool.description && <div style={{ marginTop: '4px', color: '#666' }}>{selectedPool.description}</div>}
+          {selectedPool.description && <div style={{ marginTop: '6px', color: '#666', fontSize: '13px' }}>{selectedPool.description}</div>}
         </div>
       )}
 
-      {/* Estimated Dev Hours - Required for calculations */}
-      <label style={{ color: '#000' }}>
-        Estimated Dev Hours*:
-        <input type="number" name="estimatedHours" value={form.estimatedHours} onChange={handleChange} min={1} required style={formStyles.inputShort} />
-        {errors.estimatedHours && <span style={{ color: 'red' }}>{errors.estimatedHours}</span>}
-      </label>
-
-      {/* Weekly Allocation - Affects date calculations */}
-      <label style={{ color: '#000' }}>
-        Weekly Allocation (% of {selectedPool?.standardWeekHours || 40}h week)*:
-        <input
-          type="number"
-          name="weeklyAllocation"
-          value={form.weeklyAllocation}
-          onChange={handleChange}
-          min={0}
-          max={100}
-          style={formStyles.inputShort}
-          required
-        />
-        <small style={{ color: '#666', fontSize: '12px', marginLeft: '8px' }}>
-          Required for date auto-calculation
-        </small>
-        {errors.weeklyAllocation && <span style={{ color: 'red' }}>{errors.weeklyAllocation}</span>}
-      </label>
+      {/* Estimated Dev Hours and Weekly Allocation - Side by side */}
+      <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem' }}>
+        <div style={{ flex: '1' }}>
+          <label style={formStyles.label}>
+            Estimated Dev Hours*
+          </label>
+          <input type="number" name="estimatedHours" value={form.estimatedHours} onChange={handleChange} min={1} required style={formStyles.inputShort} />
+          {errors.estimatedHours && <span style={{ color: 'red', fontSize: '12px', marginTop: '0.25rem', display: 'block' }}>{errors.estimatedHours}</span>}
+        </div>
+        <div style={{ flex: '1' }}>
+          <label style={formStyles.label}>
+            Weekly Allocation (% of {selectedPool?.standardWeekHours || 40}h week)*
+          </label>
+          <input
+            type="number"
+            name="weeklyAllocation"
+            value={form.weeklyAllocation}
+            onChange={handleChange}
+            min={0}
+            max={100}
+            style={formStyles.inputShort}
+            required
+          />
+          <small style={{ color: '#666', fontSize: '12px', marginTop: '0.25rem', display: 'block' }}>
+            Required for date auto-calculation
+          </small>
+          {errors.weeklyAllocation && <span style={{ color: 'red', fontSize: '12px', marginTop: '0.25rem', display: 'block' }}>{errors.weeklyAllocation}</span>}
+        </div>
+      </div>
 
       {/* Dynamic Duration Calculation */}
       {calculatedDuration && (
@@ -630,12 +661,12 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ initialData, onSave, onCancel
         </div>
         
         <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
-          <label style={{ color: '#000', flex: '1', minWidth: '200px' }}>
+          <div style={{ flex: '1', minWidth: '200px' }}>
             <div style={{ 
               display: 'flex', 
               alignItems: 'center', 
               gap: '8px', 
-              marginBottom: '4px',
+              marginBottom: '0.5rem',
               cursor: 'pointer'
             }} onClick={() => {
               if (form.estimatedHours > 0 && (form.weeklyAllocation || 0) > 0 && form.targetDate) {
@@ -657,7 +688,9 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ initialData, onSave, onCancel
                 }));
               }
             }}>
-              <span style={{ fontWeight: 'bold' }}>Start Date</span>
+              <label style={formStyles.label}>
+                Start Date
+              </label>
               {form.estimatedHours > 0 && (form.weeklyAllocation || 0) > 0 && form.targetDate && (
                 <span style={{ 
                   fontSize: '12px', 
@@ -672,14 +705,14 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ initialData, onSave, onCancel
               )}
             </div>
             <input type="date" name="startDate" value={form.startDate} onChange={handleChange} style={formStyles.inputDate} />
-            {errors.startDate && <span style={{ color: 'red' }}>{errors.startDate}</span>}
-          </label>
-          <label style={{ color: '#000', flex: '1', minWidth: '200px' }}>
+            {errors.startDate && <span style={{ color: 'red', fontSize: '12px', marginTop: '0.25rem', display: 'block' }}>{errors.startDate}</span>}
+          </div>
+          <div style={{ flex: '1', minWidth: '200px' }}>
             <div style={{ 
               display: 'flex', 
               alignItems: 'center', 
               gap: '8px', 
-              marginBottom: '4px',
+              marginBottom: '0.5rem',
               cursor: 'pointer'
             }} onClick={() => {
               if (form.estimatedHours > 0 && (form.weeklyAllocation || 0) > 0 && form.startDate) {
@@ -701,7 +734,9 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ initialData, onSave, onCancel
                 }));
               }
             }}>
-              <span style={{ fontWeight: 'bold' }}>Target End Date</span>
+              <label style={formStyles.label}>
+                Target End Date
+              </label>
               {form.estimatedHours > 0 && (form.weeklyAllocation || 0) > 0 && form.startDate && (
                 <span style={{ 
                   fontSize: '12px', 
@@ -728,8 +763,8 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ initialData, onSave, onCancel
               )}
             </div>
             <input type="date" name="targetDate" value={form.targetDate} onChange={handleChange} style={formStyles.inputDate} />
-            {errors.targetDate && <span style={{ color: 'red' }}>{errors.targetDate}</span>}
-          </label>
+            {errors.targetDate && <span style={{ color: 'red', fontSize: '12px', marginTop: '0.25rem', display: 'block' }}>{errors.targetDate}</span>}
+          </div>
         </div>
         
         {/* Show calculated duration if both dates are set */}
@@ -767,18 +802,24 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ initialData, onSave, onCancel
       </div>
 
       {/* Other Project Details */}
-      <label style={{ color: '#000' }}>
-        Project Sponsor:
+      <div>
+        <label style={formStyles.label}>
+          Project Sponsor
+        </label>
         <input name="sponsor" value={form.sponsor} onChange={handleChange} style={formStyles.input} />
-      </label>
+      </div>
 
-      <label style={{ color: '#000' }}>
-        Current Progress (%):
+      <div>
+        <label style={formStyles.label}>
+          Current Progress (%)
+        </label>
         <input type="number" name="progress" value={form.progress} onChange={handleChange} min={0} max={100} style={formStyles.inputShort} />
-      </label>
+      </div>
 
-      <label style={{ color: '#000' }}>
-        Project Status:
+      <div>
+        <label style={formStyles.label}>
+          Project Status
+        </label>
         <select name="status" value={form.status} onChange={handleChange} style={formStyles.selectMedium}>
           <option value="Not Started">Not Started</option>
           <option value="Planning">Planning</option>
@@ -788,7 +829,7 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ initialData, onSave, onCancel
           <option value="Complete">Complete</option>
           <option value="On Hold">On Hold</option>
         </select>
-      </label>
+      </div>
 
       {/* Weekly Allocations Section */}
       <div style={{ marginTop: '1rem', padding: '1rem', backgroundColor: '#f8f9fa', borderRadius: '6px', border: '1px solid #e9ecef' }}>
@@ -911,8 +952,10 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ initialData, onSave, onCancel
         )}
       </div>
 
-      <label style={{ color: '#000' }}>
-        Notes:
+      <div>
+        <label style={formStyles.label}>
+          Notes
+        </label>
         <textarea 
           name="notes" 
           value={form.notes} 
@@ -921,7 +964,7 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ initialData, onSave, onCancel
           placeholder="Enter project notes, requirements, or additional details..."
           style={formStyles.textarea}
         />
-      </label>
+      </div>
       <div style={{ display: 'flex', gap: '1rem', alignSelf: 'flex-start' }}>
         <button type="submit">{initialData ? 'Update Project' : 'Save Project'}</button>
         <button 
