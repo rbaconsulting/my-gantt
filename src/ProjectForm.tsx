@@ -34,6 +34,9 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ initialData, onSave, onCancel
     
     if (!selectedPool) return null;
 
+    // Only apply over-allocation logic to Development or Testing status projects
+    if (form.status !== 'Development' && form.status !== 'Testing') return null;
+
     // Calculate what the project would contribute to pool utilization
     const projectHoursPerWeek = (form.weeklyAllocation / 100) * (selectedPool.standardWeekHours || 40);
     
@@ -158,6 +161,23 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ initialData, onSave, onCancel
       
       const startDate = subtractWorkDays(endDate, workDaysNeeded);
       newForm.startDate = startDate.toISOString().split('T')[0];
+    } else if (name === 'weeklyAllocation' && form.startDate && form.estimatedHours > 0 && Number(value) > 0) {
+      // Auto-recalculate target end date when weekly allocation changes
+      const startDate = new Date(form.startDate);
+      const availableHoursPerWeek = (Number(value) / 100) * (selectedPool?.standardWeekHours || 40);
+      
+      // Calculate weeks needed (can be fractional)
+      const weeksNeeded = form.estimatedHours / availableHoursPerWeek;
+      
+      // Convert weeks to work days (assuming 5 work days per week)
+      const workDaysNeeded = Math.ceil(weeksNeeded * 5);
+      
+      const endDate = addWorkDays(startDate, workDaysNeeded);
+      newForm.targetDate = endDate.toISOString().split('T')[0];
+      newForm.autoRecalculated = true; // Flag to show recalculation note
+    } else if (name === 'targetDate') {
+      // Clear auto-recalculated flag when user manually changes target date
+      newForm.autoRecalculated = false;
     }
 
     setForm(newForm);
@@ -311,9 +331,9 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ initialData, onSave, onCancel
         </div>
       )}
 
-      {/* Estimated Hours - Required for calculations */}
+      {/* Estimated Dev Hours - Required for calculations */}
       <label style={{ color: '#000' }}>
-        Estimated Hours*:
+        Estimated Dev Hours*:
         <input type="number" name="estimatedHours" value={form.estimatedHours} onChange={handleChange} min={1} required />
         {errors.estimatedHours && <span style={{ color: 'red' }}>{errors.estimatedHours}</span>}
       </label>
@@ -519,6 +539,18 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ initialData, onSave, onCancel
                   cursor: 'pointer'
                 }} title="Click to recalculate end date">
                   🔄 Recalc
+                </span>
+              )}
+              {form.autoRecalculated && (
+                <span style={{ 
+                  fontSize: '11px', 
+                  color: '#059669', 
+                  backgroundColor: '#d1fae5', 
+                  padding: '2px 6px', 
+                  borderRadius: '4px',
+                  marginLeft: '8px'
+                }} title="Target end date was automatically recalculated based on weekly allocation change">
+                  ✓ Auto-calculated
                 </span>
               )}
             </div>

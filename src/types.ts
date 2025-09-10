@@ -20,6 +20,7 @@ export interface ProjectFormData {
   status?: string;
   weeklyAllocation?: number; // percent of 40-hour week
   notes?: string;
+  autoRecalculated?: boolean; // Flag to indicate if target date was auto-calculated
   lastModified?: string; // ISO timestamp
 }
  

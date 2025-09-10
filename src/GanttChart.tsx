@@ -133,12 +133,12 @@ function getPoolColor(poolName: string, pools: PoolData[]) {
   return poolColors[idx % poolColors.length] || '#888';
 }
 
-function getProjectColor(project: ProjectFormData, pools: PoolData[]) {
-  // If project has a status, use status color; otherwise use pool color
+function getProjectColor(project: ProjectFormData) {
+  // Always use status color for main bars, fallback to gray if no status
   if (project.status && statusColors[project.status]) {
     return statusColors[project.status];
   }
-  return getPoolColor(project.pool, pools);
+  return '#9ca3af'; // Default gray for projects without status
 }
 
 function getDateRange(projects: ProjectFormData[]) {
@@ -905,7 +905,7 @@ const GanttChart: React.FC<GanttChartProps> = ({ projects, pools, filters, onWee
             const y = CHART_TOP_PAD + actualIndex * (BAR_HEIGHT + BAR_GAP);
             const x1 = dateToX(proj.startDate);
             const barWidth = getProjectWidth(proj.startDate, proj.targetDate);
-            const color = getProjectColor(proj, pools);
+            const color = getProjectColor(proj);
             
             // Tooltip calculations
             const pool = pools.find(p => p.name === proj.pool);
@@ -922,12 +922,14 @@ const GanttChart: React.FC<GanttChartProps> = ({ projects, pools, filters, onWee
             const allocatedThisWeek = poolWeeklyHours * (allocationPercent / 100) / concurrentCount;
             
             // Check if this project's pool is over-allocated AND this project has work in current week
+            // Only apply over-allocation logic to Development or Testing status projects
             const poolUtilization = calculatePoolUtilization(projects, pools, proj.pool, currentWeekStart, currentWeekEnd);
+            const isDevelopmentOrTesting = proj.status === 'Development' || proj.status === 'Testing';
             const hasWorkThisWeek = allocationPercent > 0 && 
               new Date(proj.startDate) <= currentWeekEnd && 
               new Date(proj.targetDate) >= currentWeekStart &&
               !proj.status?.toLowerCase().includes('complete');
-            const isOverAllocated = poolUtilization.isOverAllocated && hasWorkThisWeek;
+            const isOverAllocated = poolUtilization.isOverAllocated && hasWorkThisWeek && isDevelopmentOrTesting;
             
             return (
               <g key={proj.name}>
