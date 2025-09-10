@@ -368,7 +368,7 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ initialData, onSave, onCancel
       {/* Pool Selection - Affects available hours */}
       <label style={{ color: '#000' }}>
         Project Pool*:
-        <select name="pool" value={form.pool} onChange={handleChange} required>
+        <select name="pool" value={form.pool} onChange={handleChange} required style={{ color: '#000' }}>
           <option value="">Select a pool...</option>
           {pools.map((pool) => (
             <option key={pool.name} value={pool.name}>
@@ -667,7 +667,7 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ initialData, onSave, onCancel
 
       <label style={{ color: '#000' }}>
         Project Status:
-        <select name="status" value={form.status} onChange={handleChange}>
+        <select name="status" value={form.status} onChange={handleChange} style={{ color: '#000' }}>
           <option value="Not Started">Not Started</option>
           <option value="Planning">Planning</option>
           <option value="Development">Development</option>
@@ -702,7 +702,8 @@ const ProjectForm: React.FC<ProjectFormProps> = ({ initialData, onSave, onCancel
                 borderRadius: '4px',
                 fontSize: '14px',
                 width: '100%',
-                backgroundColor: 'white'
+                backgroundColor: 'white',
+                color: '#000'
               }}
             >
               <option value="">Select a week...</option>

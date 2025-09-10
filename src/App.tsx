@@ -380,6 +380,7 @@ function App() {
               projects={projects.filter(p => projectVisibility[p.name])} 
               pools={pools} 
               filters={filters}
+              selectedWeekIndex={selectedWeekIndex}
               onWeekSelect={handleWeekSelect}
             />
           </ErrorBoundary>

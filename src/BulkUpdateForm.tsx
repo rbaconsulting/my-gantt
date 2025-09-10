@@ -290,7 +290,8 @@ const BulkUpdateForm: React.FC<BulkUpdateFormProps> = ({
               fontSize: '14px',
               width: '100%',
               maxWidth: '300px',
-              backgroundColor: 'white'
+              backgroundColor: 'white',
+              color: '#000'
             }}
           >
             {weekStarts.map((weekStart, index) => {
@@ -327,7 +328,8 @@ const BulkUpdateForm: React.FC<BulkUpdateFormProps> = ({
             border: '1px solid #d1d5db',
             borderRadius: '4px',
             fontSize: '14px',
-            minWidth: '200px'
+            minWidth: '200px',
+            color: '#000'
           }}
         >
           <option value="">Select a pool...</option>

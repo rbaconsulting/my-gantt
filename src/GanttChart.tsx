@@ -101,6 +101,7 @@ interface GanttChartProps {
     };
     search?: string;
   };
+  selectedWeekIndex?: number | null;
   onWeekSelect?: (weekIndex: number | null, weekStart: Date | null) => void;
 }
 
@@ -406,10 +407,17 @@ function renderMeetingHoursIndicators(projects: ProjectFormData[], pools: PoolDa
   return meetingIndicators;
 }
 
-const GanttChart: React.FC<GanttChartProps> = ({ projects, pools, filters, onWeekSelect }) => {
+const GanttChart: React.FC<GanttChartProps> = ({ projects, pools, filters, selectedWeekIndex: externalSelectedWeekIndex, onWeekSelect }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(1200);
   const [selectedWeekIndex, setSelectedWeekIndex] = useState<number | null>(null);
+  
+  // Sync internal state with external prop
+  useEffect(() => {
+    if (externalSelectedWeekIndex !== undefined) {
+      setSelectedWeekIndex(externalSelectedWeekIndex);
+    }
+  }, [externalSelectedWeekIndex]);
   
   // Virtual scrolling state
   const [scrollTop, setScrollTop] = useState(0);
